@@ -14,7 +14,7 @@ App chia tiền cho nhóm bạn: React (Vite) + Supabase, deploy miễn phí tr�
 
 1. Vào [supabase.com](https://supabase.com), tạo project mới (gói Free).
 2. Với project mới, chạy `supabase/schema.sql` trong **SQL Editor → New query**.
-3. Chạy tiếp file migration `supabase/migrations/20261011000000_google_auth_audit.sql`. Nếu database đã dùng schema cũ, chỉ cần chạy migration này; không chạy lại schema khởi tạo.
+3. Chạy các file trong `supabase/migrations/` theo thứ tự tên, bắt đầu từ `20261011000000_google_auth_audit.sql`. Với database hiện có, chạy migration mà project chưa áp dụng; không chạy lại schema khởi tạo.
 4. Trong **Authentication → Providers → Google**, bật Google và cấu hình OAuth Client ID/Secret từ Google Cloud. Đặt callback URL phía Google theo giá trị Supabase hiển thị (thường là `https://<project-ref>.supabase.co/auth/v1/callback`).
 5. Trong **Authentication → URL Configuration**, đặt Site URL và thêm redirect URLs cho môi trường local (`http://localhost:5173/**`) cùng địa chỉ GitHub Pages (`https://<user>.github.io/<repo>/**`).
 6. Vào **Project Settings → API**, copy **Project URL** và **anon public key**.
@@ -53,7 +53,7 @@ Workflow chạy test và build trước khi deploy. Nếu thiếu secrets Supaba
 - Người dùng phải đăng nhập Google để dùng ứng dụng.
 - Người tạo nhóm được lưu bằng Supabase Auth user ID và là người duy nhất (ngoài system admin) có quyền xoá nhóm.
 - Những tài khoản Google đã đăng nhập và có link nhóm (`#/g/<uuid>`) đều có thể xem/sửa dữ liệu, thành viên, khoản chi và thanh toán của nhóm. Link vẫn là bearer secret; không có cơ chế mời hoặc phân quyền thành viên.
-- Người mở link có thể bấm **Tham gia nhóm** để chủ nhóm thấy tài khoản Google của họ; họ không cần chọn nickname. Chủ nhóm có thể gán tài khoản vào nickname có sẵn, đổi hoặc bỏ gán. Nickname chỉ là tên hiển thị trong nhóm đó; một tài khoản có thể có nickname khác ở nhóm khác.
+- Người mở link có thể bấm **Tham gia nhóm** để tạo thành viên chính bằng tên Google; mỗi người có thể tự đổi nickname riêng trong nhóm. Chủ nhóm có thể gộp nickname tạm vào tài khoản đã tham gia. Gộp sẽ chuyển khoản chi/thanh toán sang thành viên tài khoản, lấy nickname tạm làm tên hiển thị rồi xoá thành viên tạm trong cùng transaction.
 - `thehoach92@gmail.com` là system admin: có thể xem, sửa và xoá mọi nhóm, kể cả không có link; trang chủ liệt kê nhóm theo từng trang 100 nhóm.
 - Mọi thêm/sửa/xoá nhóm, thành viên, khoản chi và thanh toán được ghi vào `group_audit_log` bằng trigger Postgres. Nhật ký chỉ đọc qua ứng dụng, không cho sửa/xoá, và bản ghi sự kiện xoá nhóm vẫn được giữ lại.
 - Các nhóm được tạo trước khi bật đăng nhập không có chủ sở hữu xác định. Người Google đầu tiên mở được link sẽ nhận quyền sở hữu nhóm đó.
@@ -67,6 +67,7 @@ Workflow chạy test và build trước khi deploy. Nếu thiếu secrets Supaba
 - Gói Free của Supabase có thể tạm dừng project nếu lâu không có hoạt động; vào dashboard bấm khôi phục là chạy lại.
 - Xoá thành viên chỉ làm được khi người đó chưa có trong khoản chi hay thanh toán nào.
 - Khi cập nhật database hiện tại để có chức năng tham gia/gán nickname, chạy migration `supabase/migrations/20261011000002_group_participants.sql`.
+- Chạy migration `supabase/migrations/20261011000003_member_accounts_and_merge.sql` để thêm thành viên tài khoản, tự đặt nickname và gộp/xoá nickname tạm.
 - `supabase/schema.sql` là schema khởi tạo; thay đổi cho project đã có dữ liệu phải đi qua migration trong `supabase/migrations/`.
 
 ## Test

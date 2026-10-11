@@ -411,13 +411,17 @@ function Group({ id, user }) {
           const joined = await run(db.rpc('join_group', { p_group_id: id }))
           return joined
         }}
-        onAssign={async (userId, memberId) => {
-          const assigned = await run(db.rpc('assign_group_member_account', {
+        onRename={async (name) => {
+          const renamed = await run(db.rpc('set_group_member_nickname', { p_group_id: id, p_name: name }))
+          return renamed
+        }}
+        onMerge={async (tempMemberId, userId) => {
+          const merged = await run(db.rpc('merge_group_temp_member', {
             p_group_id: id,
-            p_member_id: memberId,
-            p_user_id: userId || null,
+            p_temp_member_id: tempMemberId,
+            p_user_id: userId,
           }))
-          return assigned
+          return merged
         }}
       />
 
@@ -619,10 +623,17 @@ function AuditHistory({ entries, nameOf, onLoadMore, canLoadMore, groupParticipa
   )
 }
 
-function GroupParticipation({ user, participants, members, canManage, onJoin, onAssign }) {
+function GroupParticipation({ user, participants, members, canManage, onJoin, onRename, onMerge }) {
   const [busy, setBusy] = useState(false)
-  const [savingUserId, setSavingUserId] = useState(null)
+  const [savingKey, setSavingKey] = useState('')
+  const [nickname, setNickname] = useState('')
+  const [selectedTemps, setSelectedTemps] = useState({})
   const joined = participants.some((participant) => participant.user_id === user.id)
+  const myMember = members.find((member) => member.account_id === user.id)
+
+  useEffect(() => {
+    setNickname(myMember?.name || '')
+  }, [myMember?.id, myMember?.name])
 
   async function join() {
     setBusy(true)
@@ -630,64 +641,97 @@ function GroupParticipation({ user, participants, members, canManage, onJoin, on
     setBusy(false)
   }
 
-  async function assign(participantUserId, memberId) {
-    setSavingUserId(participantUserId)
-    await onAssign(participantUserId, memberId)
-    setSavingUserId(null)
+  async function saveNickname(event) {
+    event.preventDefault()
+    setSavingKey('nickname')
+    const saved = await onRename(nickname)
+    setSavingKey('')
+    if (saved) setNickname(nickname.trim())
   }
 
-  if (!joined) {
+  async function mergeTemp(participant, tempMember) {
+    if (!window.confirm(`Gộp “${tempMember.name}” vào tài khoản ${participant.display_name || participant.email || 'này'}? Các khoản chi và thanh toán sẽ được chuyển sang tên “${tempMember.name}”, sau đó nickname tạm bị xoá.`)) return
+    setSavingKey(participant.user_id)
+    await onMerge(tempMember.id, participant.user_id)
+    setSavingKey('')
+  }
+
+  if (!joined || !myMember) {
     return (
       <section className="card">
         <h2>Tham gia nhóm</h2>
-        <p className="muted">Tham gia để chủ nhóm thấy tài khoản của bạn và gán bạn vào nickname đã có. Bạn không cần chọn nickname.</p>
+        <p className="muted">Tham gia để tạo thành viên chính trong nhóm bằng tên Google của bạn. Sau đó bạn có thể tự đổi nickname riêng trong nhóm.</p>
         <button onClick={join} disabled={busy}>{busy ? 'Đang tham gia…' : 'Tham gia nhóm'}</button>
       </section>
     )
   }
 
-  if (!canManage) {
-    const linkedMember = members.find((member) => member.account_id === user.id)
-    return (
-      <p className="muted small-text">
-        Bạn đã tham gia nhóm{linkedMember ? ` với nickname “${linkedMember.name}”` : ''}. Chủ nhóm có thể gán hoặc đổi nickname.
-      </p>
-    )
-  }
-
   return (
     <section className="card">
-      <h2>Người tham gia qua link</h2>
-      <p className="muted small-text">Gán tài khoản vào nickname đã tạo sẵn. Có thể đổi hoặc bỏ gán sau.</p>
-      {participants.length === 0 ? <p className="muted">Chưa có ai tham gia.</p> : (
+      <h2>Nickname trong nhóm</h2>
+      <form className="row" onSubmit={saveNickname}>
+        <input
+          value={nickname}
+          onChange={(event) => setNickname(event.target.value)}
+          placeholder="Nickname của bạn trong nhóm"
+          maxLength={40}
+          required
+        />
+        <button disabled={savingKey === 'nickname' || !nickname.trim() || nickname.trim() === myMember.name}>
+          {savingKey === 'nickname' ? 'Đang lưu…' : 'Lưu'}
+        </button>
+      </form>
+      <p className="muted small-text">Nickname chỉ hiển thị trong nhóm này. Bạn có thể tự thay đổi bất cứ lúc nào.</p>
+      {canManage && (
+        <>
+          <h3>Gộp nickname tạm</h3>
+          <p className="muted small-text">Chọn nickname tạm để chuyển toàn bộ khoản chi và thanh toán vào tài khoản chính. Nickname tạm sẽ bị xoá.</p>
+        </>
+      )}
+      {canManage && participants.length > 0 && (
         <ul className="list">
           {participants.map((participant) => {
             const linkedMember = members.find((member) => member.account_id === participant.user_id)
-            const availableMembers = members.filter(
-              (member) => !member.account_id || member.account_id === participant.user_id,
-            )
             const label = participant.display_name || participant.email || 'Tài khoản Google'
+            const tempMembers = members.filter((member) => member.account_id === null)
 
             return (
               <li key={participant.id}>
                 <span>
-                  <b>{label}</b>
+                  <b>{label}</b>{linkedMember && ` · ${linkedMember.name}`}
                   {participant.email && participant.display_name && (
                     <><br /><span className="muted small-text">{participant.email}</span></>
                   )}
                 </span>
-                <select
-                  className="participant-member-select"
-                  aria-label={`Gán nickname cho ${label}`}
-                  value={linkedMember?.id || ''}
-                  disabled={savingUserId !== null}
-                  onChange={(event) => assign(participant.user_id, event.target.value || null)}
-                >
-                  <option value="">Chưa gán nickname</option>
-                  {availableMembers.map((member) => (
-                    <option key={member.id} value={member.id}>{member.name}</option>
-                  ))}
-                </select>
+                {linkedMember && tempMembers.length > 0 && (
+                  <span className="row gap">
+                    <select
+                      className="participant-member-select"
+                      aria-label={`Nickname tạm cần gộp vào ${label}`}
+                      value={selectedTemps[participant.user_id] || ''}
+                      disabled={savingKey !== ''}
+                      onChange={(event) => setSelectedTemps((current) => ({
+                        ...current,
+                        [participant.user_id]: event.target.value,
+                      }))}
+                    >
+                      <option value="">Chọn nickname tạm</option>
+                      {tempMembers.map((member) => (
+                        <option key={member.id} value={member.id}>{member.name}</option>
+                      ))}
+                    </select>
+                    <button
+                      className="secondary small"
+                      disabled={!selectedTemps[participant.user_id] || savingKey !== ''}
+                      onClick={() => {
+                        const selected = tempMembers.find((member) => member.id === selectedTemps[participant.user_id])
+                        if (selected) mergeTemp(participant, selected)
+                      }}
+                    >
+                      {savingKey === participant.user_id ? 'Đang gộp…' : 'Gộp'}
+                    </button>
+                  </span>
+                )}
               </li>
             )
           })}
@@ -889,9 +933,9 @@ function Members({ members, expenses, payments, onAdd, onDelete, onBlocked }) {
           {members.map((m) => (
             <span className="chip" key={m.id}>
               {m.name}
-              <button className="ghost small" onClick={() => remove(m)} title="Xoá">
-                ✕
-              </button>
+              {m.account_id
+                ? <span className="muted small-text" title="Tài khoản đã tham gia">· tài khoản</span>
+                : <button className="ghost small" onClick={() => remove(m)} title="Xoá">✕</button>}
             </span>
           ))}
         </div>

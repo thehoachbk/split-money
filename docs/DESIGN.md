@@ -30,7 +30,7 @@ Theo thứ tự:
 1. Tóm tắt tên nhóm, số thành viên, số khoản chi, tổng chi; nút sao chép link và nhắc về quyền truy cập bằng link.
 2. Danh sách thành viên dạng chip và form thêm người.
 3. Form khoản chi khi có ít nhất hai thành viên; gồm nội dung, số tiền, người trả và lựa chọn người tham gia.
-4. Card “Ai trả ai” khi có ít nhất hai thành viên; gồm giao dịch đề xuất, nút ghi nhận đã trả và số dư từng người.
+4. Card tài khoản chung và số dư từng người; số âm là cần chuyển vào tài khoản chung, số dương là được nhận từ tài khoản chung.
 5. Danh sách khoản chi mới nhất trước, có thao tác sửa và xoá.
 6. Danh sách thanh toán đã ghi nhận khi có dữ liệu, có thao tác sửa và xoá.
 7. Card lịch sử thay đổi hiển thị actor, thời gian, loại hành động và giá trị liên quan trước/sau; tải theo từng trang 100 hoạt động.
@@ -60,12 +60,13 @@ Theo thứ tự:
 - `src/settle.js` là nguồn chuẩn cho phép tính số dư và tạo danh sách thanh toán đề xuất; không chuyển logic tiền sang UI hoặc làm tròn qua số thực ngoài phần parse/DB cần thiết.
 - Một Supabase client giữ session Auth; fetch wrapper thêm `x-group-id` theo nhóm đang hoạt động để đáp ứng chính sách RLS.
 - State nhóm và audit log được tải từ Supabase; sau thao tác ghi thành công, tải lại dữ liệu. Tab đang hiển thị polling mỗi 15 giây.
+- Chủ nhóm/system admin có thể gỡ tài khoản khỏi danh sách tham gia bằng RPC bảo vệ quyền; thành viên còn được khoản chi/thanh toán tham chiếu được giữ để bảo toàn sổ sách, nhưng mất quyền chat.
 
 ## Supabase và dữ liệu
 
 ### Bảng
 
-- `groups`: UUID nhóm, tên, thời điểm tạo.
+- `groups`: UUID nhóm, tên, mô tả, thông tin tài khoản nhận tiền chung, thời điểm tạo.
 - `members`: thành viên thuộc nhóm.
 - `expenses`: mô tả, số nguyên VND dạng `bigint`, người trả, UUID người tham gia và thời điểm tạo.
 - `payments`: thành viên gửi/nhận, số nguyên VND và thời điểm tạo.
@@ -79,6 +80,7 @@ Các ràng buộc chi tiết và index nằm trong `supabase/schema.sql`. Thay �
 - Hàm `public.current_group_id()` đọc header từ request; RLS cho phép authenticated với UUID đúng.
 - System admin được nhận diện bằng email `thehoach92@gmail.com` cùng Google provider claim trong JWT và được policy mở quyền toàn hệ thống.
 - Tạo nhóm gắn `created_by=auth.uid()`. Xoá nhóm chỉ qua RPC bảo vệ chủ sở hữu/admin; RPC xoá child records theo thứ tự để giữ audit trigger.
+- Thông tin tài khoản nhận tiền chung được cập nhật qua RPC giới hạn chủ nhóm/system admin; người có quyền đọc nhóm xem được các trường ngân hàng, số tài khoản và chủ tài khoản.
 - Trigger `public.log_group_change()` lưu actor và before/after snapshots. Audit log chỉ grant `SELECT` và trigger ngăn UPDATE/DELETE.
 - Link vẫn là bearer secret giữa các tài khoản đã đăng nhập; người dùng có link có thể thay đổi dữ liệu. Không mô tả như hệ thống lời mời/phân quyền.
 - `anon key` được dùng ở client browser và không phải bí mật. Không đưa `service_role` key vào frontend, Git hoặc tài liệu.

@@ -99,6 +99,28 @@ p {
   font-size: 0.82rem;
 }
 
+.transfer-account-details {
+  display: grid;
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+
+.transfer-account-details > div {
+  display: grid;
+  grid-template-columns: minmax(7rem, 0.4fr) 1fr;
+  gap: 0.75rem;
+}
+
+.transfer-account-details dt {
+  color: var(--muted);
+}
+
+.transfer-account-details dd {
+  margin: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
 .center {
   text-align: center;
 }

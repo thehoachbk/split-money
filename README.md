@@ -5,8 +5,7 @@ App chia tiền cho nhóm bạn: React (Vite) + Supabase, deploy miễn phí tr�
 - [Đặc tả sản phẩm](./docs/SPEC.md) · [Thiết kế giao diện và kiến trúc](./docs/DESIGN.md)
 - Đăng nhập Google, tạo nhóm rồi gửi link cho những người cần tham gia.
 - Thêm thành viên, thêm khoản chi (ai trả, chia cho những ai).
-- Tự tính số dư từng người và gợi ý **ai trả ai** với số giao dịch ít nhất.
-- Bấm "Đã trả" để ghi nhận khi đã chuyển tiền.
+- Tự tính số dư từng người; chủ nhóm cài tài khoản nhận tiền chung để mọi người chuyển khoản âm vào, người có số dư dương nhận tiền từ đó.
 - Sửa/xoá khoản chi và thanh toán; mọi thay đổi trong nhóm được lưu vào lịch sử.
 - Nhập số tiền kiểu `150000`, `150.000`, `150k`, `1.5tr` đều được.
 
@@ -54,7 +53,9 @@ Workflow chạy test và build trước khi deploy. Nếu thiếu secrets Supaba
 - Người tạo nhóm được lưu bằng Supabase Auth user ID và là người duy nhất (ngoài system admin) có quyền xoá nhóm.
 - Những tài khoản Google đã đăng nhập và có link nhóm (`#/g/<uuid>`) đều có thể xem/sửa dữ liệu, thành viên, khoản chi và thanh toán của nhóm. Link vẫn là bearer secret; không có cơ chế mời hoặc phân quyền thành viên.
 - Người mở link có thể bấm **Tham gia nhóm** để tạo thành viên chính bằng tên Google; mỗi người có thể tự đổi nickname riêng trong nhóm. Chủ nhóm có thể gộp nickname tạm vào tài khoản đã tham gia. Gộp sẽ chuyển khoản chi/thanh toán sang thành viên tài khoản, lấy nickname tạm làm tên hiển thị rồi xoá thành viên tạm trong cùng transaction.
+- Chủ nhóm hoặc system admin có thể xoá người tham gia khỏi danh sách nhóm. Quyền chat bị thu hồi; dữ liệu chi tiêu cũ được giữ nguyên (thành viên tài chính chỉ bị xoá nếu chưa được dùng).
 - Mô tả nhóm (tối đa 500 ký tự) hiển thị cho người mở link; chỉ chủ nhóm hoặc system admin được cập nhật.
+- Chủ nhóm hoặc system admin cấu hình ngân hàng, số tài khoản và chủ tài khoản chung; người có link nhóm đăng nhập thấy thông tin này.
 - `thehoach92@gmail.com` là system admin: có thể xem, sửa và xoá mọi nhóm, kể cả không có link; trang chủ liệt kê nhóm theo từng trang 100 nhóm.
 - Mọi thêm/sửa/xoá nhóm, thành viên, khoản chi và thanh toán được ghi vào `group_audit_log` bằng trigger Postgres. Nhật ký chỉ đọc qua ứng dụng, không cho sửa/xoá, và bản ghi sự kiện xoá nhóm vẫn được giữ lại.
 - Mỗi nhóm có tab chat văn bản; người đăng nhập đã tham gia nhóm có thể gửi và xem 200 tin gần nhất. Tin nhắn được lưu bất biến và cập nhật qua Supabase Realtime (có làm mới dự phòng).
@@ -73,6 +74,8 @@ Workflow chạy test và build trước khi deploy. Nếu thiếu secrets Supaba
 - Chạy migration `supabase/migrations/20261011000004_creator_auto_member.sql` để người tạo nhóm tự có thành viên chính ngay khi tạo nhóm; migration cũng thêm thành viên chính cho các nhóm hiện có.
 - Chạy migration `supabase/migrations/20261011000005_group_chat.sql` để bật chat nhóm và Realtime.
 - Chạy migration `supabase/migrations/20261011000006_group_description.sql` để thêm mô tả nhóm và quyền cập nhật dành cho chủ nhóm.
+- Chạy migration `supabase/migrations/20261011000007_remove_group_participant.sql` để chủ nhóm có thể gỡ tài khoản đã tham gia mà vẫn bảo toàn lịch sử chi tiêu.
+- Chạy migration `supabase/migrations/20261011000008_group_transfer_account.sql` để thêm tài khoản nhận tiền chung cho nhóm.
 - `supabase/schema.sql` là schema khởi tạo; thay đổi cho project đã có dữ liệu phải đi qua migration trong `supabase/migrations/`.
 
 ## Test

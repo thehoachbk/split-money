@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { clientFor, isConfigured, supabase } from './supabase.js'
-import { computeBalances, settleDebts } from './settle.js'
+import { computeBalances } from './settle.js'
 import { forgetRecent, formatTime, formatVND, getRecent, parseAmount, saveRecent } from './util.js'
 
 function hasSystemAdminAccess(user) {
@@ -289,7 +289,10 @@ function Group({ id, user }) {
 
   const load = useCallback(async () => {
     const [g, m, r, e, p, a] = await Promise.all([
-      db.from('groups').select('id,name,description,created_by').eq('id', id).maybeSingle(),
+      db.from('groups')
+        .select('id,name,description,transfer_bank_name,transfer_account_number,transfer_account_holder,created_by')
+        .eq('id', id)
+        .maybeSingle(),
       db.from('members').select('id,name,account_id').eq('group_id', id).order('created_at'),
       db.from('group_participants').select('id,user_id,display_name,email,joined_at').eq('group_id', id).order('joined_at'),
       db.from('expenses').select('*').eq('group_id', id).order('created_at', { ascending: false }),
@@ -312,7 +315,7 @@ function Group({ id, user }) {
         } else {
           const { data: updatedGroup, error: reloadError } = await db
             .from('groups')
-            .select('id,name,description,created_by')
+            .select('id,name,description,transfer_bank_name,transfer_account_number,transfer_account_holder,created_by')
             .eq('id', id)
             .maybeSingle()
           if (reloadError) setError(reloadError.message)
@@ -354,7 +357,6 @@ function Group({ id, user }) {
   const nameOf = useCallback((mid) => members.find((m) => m.id === mid)?.name ?? '(đã xoá)', [members])
 
   const balances = useMemo(() => computeBalances(members, expenses, payments), [members, expenses, payments])
-  const transfers = useMemo(() => settleDebts(balances), [balances])
   const total = useMemo(() => expenses.reduce((s, e) => s + Number(e.amount), 0), [expenses])
   const isSystemAdmin = hasSystemAdminAccess(user)
   const canDeleteGroup = group?.created_by === user.id || isSystemAdmin
@@ -479,11 +481,34 @@ function Group({ id, user }) {
               </div>
             </form>
           )}
+          {canManageParticipants && (
+            <GroupTransferAccountForm
+              group={group}
+              onSave={async (account) => {
+                const saved = await run(db.rpc('update_group_transfer_account', {
+                  p_group_id: id,
+                  p_bank_name: account.bankName,
+                  p_account_number: account.accountNumber,
+                  p_account_holder: account.accountHolder,
+                }))
+                if (saved) {
+                  setGroup((current) => ({
+                    ...current,
+                    transfer_bank_name: account.bankName.trim() || null,
+                    transfer_account_number: account.accountNumber.trim() || null,
+                    transfer_account_holder: account.accountHolder.trim() || null,
+                  }))
+                }
+                return saved
+              }}
+            />
+          )}
           <GroupParticipation
             user={user}
             participants={groupParticipants}
             members={members}
             canManage={canManageParticipants}
+            groupOwnerId={group.created_by}
             onJoin={async () => run(db.rpc('join_group', { p_group_id: id }))}
             onRename={async (name) => run(db.rpc('set_group_member_nickname', { p_group_id: id, p_name: name }))}
             onMerge={async (tempMemberId, userId) => run(db.rpc('merge_group_temp_member', {
@@ -491,9 +516,14 @@ function Group({ id, user }) {
               p_temp_member_id: tempMemberId,
               p_user_id: userId,
             }))}
+            onRemove={async (userId) => run(db.rpc('remove_group_participant', {
+              p_group_id: id,
+              p_user_id: userId,
+            }))}
           />
           <Members
             members={members}
+            participants={groupParticipants}
             expenses={expenses}
             payments={payments}
             onAdd={(names) => run(db.from('members').insert(names.map((name) => ({ group_id: id, name }))))}
@@ -513,40 +543,16 @@ function Group({ id, user }) {
         />
       )}
 
-      {members.length >= 2 && (
-        <div className="card">
-          <h2>Ai trả ai</h2>
-          {transfers.length === 0 ? (
-            <p className="muted">{expenses.length === 0 ? 'Chưa có khoản chi nào.' : 'Đã cân bằng, không ai nợ ai 🎉'}</p>
+      <div className="card">
+          <h2>Tài khoản chung</h2>
+          {group.transfer_bank_name && group.transfer_account_number && group.transfer_account_holder ? (
+            <dl className="transfer-account-details">
+              <div><dt>Ngân hàng</dt><dd>{group.transfer_bank_name}</dd></div>
+              <div><dt>Số tài khoản</dt><dd>{group.transfer_account_number}</dd></div>
+              <div><dt>Chủ tài khoản</dt><dd>{group.transfer_account_holder}</dd></div>
+            </dl>
           ) : (
-            <ul className="list">
-              {transfers.map((t) => (
-                <li key={`${t.from}-${t.to}`}>
-                  <span>
-                    <b>{nameOf(t.from)}</b> → <b>{nameOf(t.to)}</b>
-                  </span>
-                  <span className="row gap">
-                    <b className="money">{formatVND(t.amount)}</b>
-                    <button
-                      className="small"
-                      onClick={() => {
-                        if (window.confirm(`Ghi nhận ${nameOf(t.from)} đã chuyển ${formatVND(t.amount)} cho ${nameOf(t.to)}?`))
-                          run(
-                            db.from('payments').insert({
-                              group_id: id,
-                              from_member: t.from,
-                              to_member: t.to,
-                              amount: t.amount,
-                            }),
-                          )
-                      }}
-                    >
-                      Đã trả
-                    </button>
-                  </span>
-                </li>
-              ))}
-            </ul>
+            <p className="muted">Chủ nhóm chưa thêm thông tin tài khoản nhận tiền.</p>
           )}
 
           <h3>Số dư từng người</h3>
@@ -564,9 +570,8 @@ function Group({ id, user }) {
               )
             })}
           </ul>
-          <p className="muted small-text">Số dương: được nhận lại. Số âm: còn nợ.</p>
-        </div>
-      )}
+          <p className="muted small-text">Số âm: chuyển số tiền đó vào tài khoản chung. Số dương: được nhận lại từ tài khoản chung.</p>
+      </div>
 
       <div className="card">
         <h2>Các khoản chi</h2>
@@ -616,6 +621,57 @@ function Group({ id, user }) {
         </p>
       )}
     </>
+  )
+}
+
+function GroupTransferAccountForm({ group, onSave }) {
+  const [bankName, setBankName] = useState(group.transfer_bank_name || '')
+  const [accountNumber, setAccountNumber] = useState(group.transfer_account_number || '')
+  const [accountHolder, setAccountHolder] = useState(group.transfer_account_holder || '')
+  const [saving, setSaving] = useState(false)
+  const anyValue = bankName.trim() || accountNumber.trim() || accountHolder.trim()
+  const allValues = bankName.trim() && accountNumber.trim() && accountHolder.trim()
+  const unchanged =
+    bankName.trim() === (group.transfer_bank_name || '')
+    && accountNumber.trim() === (group.transfer_account_number || '')
+    && accountHolder.trim() === (group.transfer_account_holder || '')
+
+  useEffect(() => {
+    setBankName(group.transfer_bank_name || '')
+    setAccountNumber(group.transfer_account_number || '')
+    setAccountHolder(group.transfer_account_holder || '')
+  }, [group.transfer_bank_name, group.transfer_account_number, group.transfer_account_holder])
+
+  async function submit(event) {
+    event.preventDefault()
+    if (anyValue && !allValues) return
+    setSaving(true)
+    await onSave({ bankName, accountNumber, accountHolder })
+    setSaving(false)
+  }
+
+  return (
+    <form className="card" onSubmit={submit}>
+      <h2>Tài khoản nhận tiền chung</h2>
+      <p className="muted small-text">Mọi người chuyển khoản âm vào đây; người có số dư dương nhận tiền từ tài khoản chung.</p>
+      <div className="form-grid">
+        <label>Ngân hàng
+          <input value={bankName} onChange={(event) => setBankName(event.target.value)} maxLength={80} placeholder="Ví dụ: Vietcombank" />
+        </label>
+        <label>Số tài khoản
+          <input value={accountNumber} onChange={(event) => setAccountNumber(event.target.value)} maxLength={40} inputMode="text" />
+        </label>
+      </div>
+      <label>Chủ tài khoản
+        <input value={accountHolder} onChange={(event) => setAccountHolder(event.target.value)} maxLength={120} />
+      </label>
+      {anyValue && !allValues && <p className="muted small-text">Nhập đủ cả ba thông tin, hoặc xoá cả ba để gỡ tài khoản chung.</p>}
+      <div className="row spread">
+        <button disabled={saving || unchanged || (anyValue && !allValues)}>
+          {saving ? 'Đang lưu…' : 'Lưu tài khoản'}
+        </button>
+      </div>
+    </form>
   )
 }
 
@@ -821,7 +877,7 @@ function AuditHistory({ entries, nameOf, onLoadMore, canLoadMore, groupParticipa
   )
 }
 
-function GroupParticipation({ user, participants, members, canManage, onJoin, onRename, onMerge }) {
+function GroupParticipation({ user, participants, members, canManage, groupOwnerId, onJoin, onRename, onMerge, onRemove }) {
   const [busy, setBusy] = useState(false)
   const [savingKey, setSavingKey] = useState('')
   const [nickname, setNickname] = useState('')
@@ -851,6 +907,14 @@ function GroupParticipation({ user, participants, members, canManage, onJoin, on
     if (!window.confirm(`Gộp “${tempMember.name}” vào tài khoản ${participant.display_name || participant.email || 'này'}? Các khoản chi và thanh toán sẽ được chuyển sang tên “${tempMember.name}”, sau đó nickname tạm bị xoá.`)) return
     setSavingKey(participant.user_id)
     await onMerge(tempMember.id, participant.user_id)
+    setSavingKey('')
+  }
+
+  async function removeParticipant(participant) {
+    const label = participant.display_name || participant.email || 'Tài khoản Google'
+    if (!window.confirm(`Xoá ${label} khỏi danh sách tham gia nhóm? Người này sẽ không còn chat trong nhóm. Các khoản chi và thanh toán cũ vẫn được giữ nguyên.`)) return
+    setSavingKey(`remove-${participant.user_id}`)
+    await onRemove(participant.user_id)
     setSavingKey('')
   }
 
@@ -901,35 +965,48 @@ function GroupParticipation({ user, participants, members, canManage, onJoin, on
                     <><br /><span className="muted small-text">{participant.email}</span></>
                   )}
                 </span>
-                {linkedMember && tempMembers.length > 0 && (
-                  <span className="row gap">
-                    <select
-                      className="participant-member-select"
-                      aria-label={`Nickname tạm cần gộp vào ${label}`}
-                      value={selectedTemps[participant.user_id] || ''}
-                      disabled={savingKey !== ''}
-                      onChange={(event) => setSelectedTemps((current) => ({
-                        ...current,
-                        [participant.user_id]: event.target.value,
-                      }))}
-                    >
-                      <option value="">Chọn nickname tạm</option>
-                      {tempMembers.map((member) => (
-                        <option key={member.id} value={member.id}>{member.name}</option>
-                      ))}
-                    </select>
+                <span className="row gap">
+                  {linkedMember && tempMembers.length > 0 && (
+                    <>
+                      <select
+                        className="participant-member-select"
+                        aria-label={`Nickname tạm cần gộp vào ${label}`}
+                        value={selectedTemps[participant.user_id] || ''}
+                        disabled={savingKey !== ''}
+                        onChange={(event) => setSelectedTemps((current) => ({
+                          ...current,
+                          [participant.user_id]: event.target.value,
+                        }))}
+                      >
+                        <option value="">Chọn nickname tạm</option>
+                        {tempMembers.map((member) => (
+                          <option key={member.id} value={member.id}>{member.name}</option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        className="secondary small"
+                        disabled={!selectedTemps[participant.user_id] || savingKey !== ''}
+                        onClick={() => {
+                          const selected = tempMembers.find((member) => member.id === selectedTemps[participant.user_id])
+                          if (selected) mergeTemp(participant, selected)
+                        }}
+                      >
+                        {savingKey === participant.user_id ? 'Đang gộp…' : 'Gộp'}
+                      </button>
+                    </>
+                  )}
+                  {participant.user_id !== groupOwnerId && (
                     <button
-                      className="secondary small"
-                      disabled={!selectedTemps[participant.user_id] || savingKey !== ''}
-                      onClick={() => {
-                        const selected = tempMembers.find((member) => member.id === selectedTemps[participant.user_id])
-                        if (selected) mergeTemp(participant, selected)
-                      }}
+                      type="button"
+                      className="ghost danger small"
+                      disabled={savingKey !== ''}
+                      onClick={() => removeParticipant(participant)}
                     >
-                      {savingKey === participant.user_id ? 'Đang gộp…' : 'Gộp'}
+                      {savingKey === `remove-${participant.user_id}` ? 'Đang xoá…' : 'Xoá khỏi nhóm'}
                     </button>
-                  </span>
-                )}
+                  )}
+                </span>
               </li>
             )
           })}
@@ -1099,7 +1176,7 @@ function PaymentRow({ payment, members, nameOf, onSave, onDelete }) {
   )
 }
 
-function Members({ members, expenses, payments, onAdd, onDelete, onBlocked }) {
+function Members({ members, participants = [], expenses, payments, onAdd, onDelete, onBlocked }) {
   const [text, setText] = useState('')
 
   async function submit(e) {
@@ -1131,9 +1208,11 @@ function Members({ members, expenses, payments, onAdd, onDelete, onBlocked }) {
           {members.map((m) => (
             <span className="chip" key={m.id}>
               {m.name}
-              {m.account_id
-                ? <span className="muted small-text" title="Tài khoản đã tham gia">· tài khoản</span>
-                : <button className="ghost small" onClick={() => remove(m)} title="Xoá">✕</button>}
+              {m.account_id ? (
+                <span className="muted small-text" title={participants.some((participant) => participant.user_id === m.account_id) ? 'Tài khoản đang tham gia nhóm' : 'Tài khoản đã rời danh sách tham gia'}>
+                  {participants.some((participant) => participant.user_id === m.account_id) ? '· tài khoản' : '· đã rời nhóm'}
+                </span>
+              ) : <button className="ghost small" onClick={() => remove(m)} title="Xoá">✕</button>}
             </span>
           ))}
         </div>

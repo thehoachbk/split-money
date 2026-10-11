@@ -5,6 +5,9 @@ create table if not exists public.groups (
   id         uuid primary key,
   name       text not null check (char_length(name) between 1 and 80),
   description text check (description is null or char_length(description) <= 500),
+  transfer_bank_name text check (transfer_bank_name is null or char_length(transfer_bank_name) <= 80),
+  transfer_account_number text check (transfer_account_number is null or char_length(transfer_account_number) <= 40),
+  transfer_account_holder text check (transfer_account_holder is null or char_length(transfer_account_holder) <= 120),
   created_by uuid not null references auth.users(id) on delete restrict,
   created_at timestamptz not null default now()
 );

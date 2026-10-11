@@ -1,0 +1,102 @@
+# Thiết kế — Chia tiền
+
+## Hướng thiết kế
+
+- Sản phẩm là ứng dụng web gọn nhẹ, mobile-friendly, ưu tiên hoàn thành nhanh các thao tác nhóm.
+- Đăng nhập qua Google; session giữ ở client Supabase.
+- Ngôn ngữ giao diện là tiếng Việt; thông tin tiền tệ hiển thị theo định dạng `vi-VN` với hậu tố `₫`.
+- Trình bày theo một cột, giới hạn bề rộng nội dung để dễ đọc; gom các tác vụ liên quan thành card.
+- Trạng thái, lỗi và thao tác phá huỷ phải rõ ràng. Xác nhận trước khi xoá hoặc ghi nhận thanh toán.
+
+## Bố cục và giao diện
+
+### Khung ứng dụng
+
+- Header tối giản có liên kết thương hiệu “💸 Chia tiền” quay về trang chủ.
+- Nội dung căn giữa, bề rộng tối đa 680px, có khoảng đệm hai bên và khoảng trống cuối trang.
+- Card nền tương phản, viền nhẹ, bo góc; các danh sách dùng đường phân cách.
+
+### Trang chủ
+
+1. Card tạo nhóm: mô tả ngắn, ô tên nhóm và nút tạo.
+2. Card nhóm gần đây chỉ xuất hiện khi có dữ liệu local; mỗi nhóm có liên kết mở và nút bỏ khỏi danh sách gần đây.
+3. Với system admin, thêm danh sách nhóm theo trang 100 mục để truy cập/xử lý nhóm dù không có link.
+4. Lỗi tạo nhóm xuất hiện ngay trong card tạo nhóm.
+
+### Trang nhóm
+
+Theo thứ tự:
+
+1. Tóm tắt tên nhóm, số thành viên, số khoản chi, tổng chi; nút sao chép link và nhắc về quyền truy cập bằng link.
+2. Danh sách thành viên dạng chip và form thêm người.
+3. Form khoản chi khi có ít nhất hai thành viên; gồm nội dung, số tiền, người trả và lựa chọn người tham gia.
+4. Card “Ai trả ai” khi có ít nhất hai thành viên; gồm giao dịch đề xuất, nút ghi nhận đã trả và số dư từng người.
+5. Danh sách khoản chi mới nhất trước, có thao tác sửa và xoá.
+6. Danh sách thanh toán đã ghi nhận khi có dữ liệu, có thao tác sửa và xoá.
+7. Card lịch sử thay đổi hiển thị actor, thời gian, loại hành động và giá trị liên quan trước/sau; tải theo từng trang 100 hoạt động.
+8. Nút xoá nhóm chỉ hiển thị cho người tạo hoặc system admin.
+
+### Đăng nhập và session
+
+- Người chưa đăng nhập thấy nút “Tiếp tục với Google”; OAuth quay về URL hiện tại để giữ nguyên route nhóm.
+- Header sau đăng nhập hiển thị tên/email tài khoản và nút đăng xuất.
+- Chỉ render home/group sau khi session được phục hồi; lỗi xác thực hiển thị thay vì fallback sang dữ liệu không xác thực.
+
+## Màu sắc, chữ và tương tác
+
+- Dùng CSS custom properties trong `src/styles.css` cho nền, card, chữ, đường viền, màu thương hiệu, số dư dương/âm và cảnh báo.
+- Mặc định theo giao diện sáng; `prefers-color-scheme: dark` chuyển palette sang tối.
+- Dùng font hệ thống, cỡ chữ cơ sở 16px, số tiền dùng chữ số tabular để căn hàng dễ đọc.
+- Số dư dương dùng màu xanh; số dư âm dùng màu đỏ. Không chỉ dựa vào màu: dấu `+`/`-` và nội dung giải thích cũng được hiển thị.
+- Focus của input, select và button có outline; thành phần tương tác có trạng thái disabled.
+- Trên màn hình hẹp, form lưới hai cột chuyển về một cột. Danh sách cho phép nội dung và điều khiển co giãn trong chiều ngang giới hạn.
+
+## Kiến trúc frontend
+
+- React 18 render từ `src/main.jsx`; Vite xử lý dev server và production build.
+- `src/App.jsx` chứa shell, OAuth state, các màn hình/luồng trang chủ, nhóm, thành viên, khoản chi, lịch sử.
+- Điều hướng dùng URL fragment: `#/` cho trang chủ và `#/g/<uuid>` cho nhóm; không cần fallback route phía hosting.
+- `src/util.js` định dạng tiền/giờ, phân tích đầu vào tiền và quản lý nhóm gần đây trong `localStorage`.
+- `src/settle.js` là nguồn chuẩn cho phép tính số dư và tạo danh sách thanh toán đề xuất; không chuyển logic tiền sang UI hoặc làm tròn qua số thực ngoài phần parse/DB cần thiết.
+- Một Supabase client giữ session Auth; fetch wrapper thêm `x-group-id` theo nhóm đang hoạt động để đáp ứng chính sách RLS.
+- State nhóm và audit log được tải từ Supabase; sau thao tác ghi thành công, tải lại dữ liệu. Tab đang hiển thị polling mỗi 15 giây.
+
+## Supabase và dữ liệu
+
+### Bảng
+
+- `groups`: UUID nhóm, tên, thời điểm tạo.
+- `members`: thành viên thuộc nhóm.
+- `expenses`: mô tả, số nguyên VND dạng `bigint`, người trả, UUID người tham gia và thời điểm tạo.
+- `payments`: thành viên gửi/nhận, số nguyên VND và thời điểm tạo.
+- `group_audit_log`: append-only snapshot cho mọi thao tác trên groups, members, expenses, payments; không có FK tới groups để giữ sự kiện sau khi xoá nhóm.
+
+Các ràng buộc chi tiết và index nằm trong `supabase/schema.sql`. Thay đổi schema phải có migration tương ứng cho môi trường đã triển khai.
+
+### Cô lập theo nhóm
+
+- Người dùng phải có Supabase Auth session Google; bảng dữ liệu nhóm không cấp quyền cho role `anon`.
+- Hàm `public.current_group_id()` đọc header từ request; RLS cho phép authenticated với UUID đúng.
+- System admin được nhận diện bằng email `thehoach92@gmail.com` cùng Google provider claim trong JWT và được policy mở quyền toàn hệ thống.
+- Tạo nhóm gắn `created_by=auth.uid()`. Xoá nhóm chỉ qua RPC bảo vệ chủ sở hữu/admin; RPC xoá child records theo thứ tự để giữ audit trigger.
+- Trigger `public.log_group_change()` lưu actor và before/after snapshots. Audit log chỉ grant `SELECT` và trigger ngăn UPDATE/DELETE.
+- Link vẫn là bearer secret giữa các tài khoản đã đăng nhập; người dùng có link có thể thay đổi dữ liệu. Không mô tả như hệ thống lời mời/phân quyền.
+- `anon key` được dùng ở client browser và không phải bí mật. Không đưa `service_role` key vào frontend, Git hoặc tài liệu.
+
+## Cấu hình và triển khai
+
+- Cấu hình local qua `.env` với `VITE_SUPABASE_URL` (Project URL gốc, không nối `/rest/v1`) và `VITE_SUPABASE_ANON_KEY`; `.env` phải được Git ignore.
+- Google OAuth phải được bật trong Supabase Auth, cấu hình Google Cloud callback và allowlist redirect URL cho local/GitHub Pages.
+- Production build lấy hai biến từ GitHub Actions secrets.
+- `.github/workflows/deploy.yml` chạy test, build rồi deploy `dist` lên GitHub Pages.
+- Vite dùng base path tương đối; route fragment hoạt động dưới đường dẫn repo trên Pages.
+
+## Quy ước mở rộng
+
+- Giữ UI bằng tiếng Việt và giữ quy mô nhẹ/no-account trừ khi yêu cầu sản phẩm thay đổi rõ ràng.
+- Thay đổi tính toán VND phải sửa `src/settle.js` và bổ sung test tương ứng trong `src/settle.test.js`.
+- Không che lỗi Supabase bằng state giả thành công; giữ lỗi có thể thấy được với người dùng.
+- Audit log chỉ được tạo ở database trigger, không viết log từ browser vì client có thể giả mạo actor/snapshot.
+- Schema đã triển khai phải đổi qua migration; không hướng dẫn chạy lại schema khởi tạo lên database có dữ liệu.
+- Tính năng mới cần cập nhật `docs/SPEC.md` cho hành vi, `docs/DESIGN.md` cho luồng/bố cục hoặc kiến trúc bị ảnh hưởng, và `README.md` khi thay đổi setup, bảo mật, database hay deploy.
+- Ưu tiên semantic HTML, label rõ cho input, khả năng thao tác bàn phím và trạng thái focus dễ nhận biết.

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { clientFor, isConfigured, supabase } from './supabase.js'
 import { computeBalances, settleDebts } from './settle.js'
 import { forgetRecent, formatTime, formatVND, getRecent, parseAmount, saveRecent } from './util.js'
@@ -151,6 +151,7 @@ function Shell({ children, user, onSignOut, signingOut, authError }) {
 
 function Home({ user }) {
   const [name, setName] = useState('')
+  const [description, setDescription] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [recent, setRecent] = useState(getRecent())
@@ -162,7 +163,12 @@ function Home({ user }) {
     setBusy(true)
     setError('')
     const id = crypto.randomUUID()
-    const { error: err } = await clientFor(id).from('groups').insert({ id, name: n, created_by: user.id })
+    const { error: err } = await clientFor(id).from('groups').insert({
+      id,
+      name: n,
+      description: description.trim() || null,
+      created_by: user.id,
+    })
     setBusy(false)
     if (err) {
       setError(err.message)
@@ -187,6 +193,16 @@ function Home({ user }) {
           />
           <button disabled={busy || !name.trim()}>{busy ? 'Đang tạo…' : 'Tạo nhóm'}</button>
         </div>
+        <label className="description-label">
+          Mô tả nhóm (không bắt buộc)
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Ví dụ: Chuyến đi Đà Lạt 3 ngày, cùng ghi chi phí ăn uống và đi lại."
+            maxLength={500}
+            rows={3}
+          />
+        </label>
         {error && <p className="error">{error}</p>}
       </form>
 
@@ -256,6 +272,7 @@ function AdminGroups() {
 
 function Group({ id, user }) {
   const db = useMemo(() => clientFor(id), [id])
+  const [activeTab, setActiveTab] = useState('overview')
   const [group, setGroup] = useState(null)
   const [members, setMembers] = useState([])
   const [groupParticipants, setGroupParticipants] = useState([])
@@ -267,10 +284,12 @@ function Group({ id, user }) {
   const [notFound, setNotFound] = useState(false)
   const [error, setError] = useState('')
   const [copied, setCopied] = useState(false)
+  const [descriptionDraft, setDescriptionDraft] = useState('')
+  const [savingDescription, setSavingDescription] = useState(false)
 
   const load = useCallback(async () => {
     const [g, m, r, e, p, a] = await Promise.all([
-      db.from('groups').select('id,name,created_by').eq('id', id).maybeSingle(),
+      db.from('groups').select('id,name,description,created_by').eq('id', id).maybeSingle(),
       db.from('members').select('id,name,account_id').eq('group_id', id).order('created_at'),
       db.from('group_participants').select('id,user_id,display_name,email,joined_at').eq('group_id', id).order('joined_at'),
       db.from('expenses').select('*').eq('group_id', id).order('created_at', { ascending: false }),
@@ -293,7 +312,7 @@ function Group({ id, user }) {
         } else {
           const { data: updatedGroup, error: reloadError } = await db
             .from('groups')
-            .select('id,name,created_by')
+            .select('id,name,description,created_by')
             .eq('id', id)
             .maybeSingle()
           if (reloadError) setError(reloadError.message)
@@ -302,6 +321,7 @@ function Group({ id, user }) {
       }
       if (groupData.created_by) setError('')
       setGroup(groupData)
+      setDescriptionDraft(groupData.description || '')
       setMembers(m.data)
       setGroupParticipants(r.data)
       setExpenses(e.data)
@@ -390,6 +410,7 @@ function Group({ id, user }) {
               {members.length} người · {expenses.length} khoản chi · tổng {formatVND(total)}
             </p>
           </div>
+          {group.description && <p className="group-description">{group.description}</p>}
           <button className="secondary" onClick={copyLink}>
             {copied ? 'Đã copy ✓' : 'Copy link nhóm'}
           </button>
@@ -402,38 +423,88 @@ function Group({ id, user }) {
         )}
       </div>
 
-      <GroupParticipation
-        user={user}
-        participants={groupParticipants}
-        members={members}
-        canManage={canManageParticipants}
-        onJoin={async () => {
-          const joined = await run(db.rpc('join_group', { p_group_id: id }))
-          return joined
-        }}
-        onRename={async (name) => {
-          const renamed = await run(db.rpc('set_group_member_nickname', { p_group_id: id, p_name: name }))
-          return renamed
-        }}
-        onMerge={async (tempMemberId, userId) => {
-          const merged = await run(db.rpc('merge_group_temp_member', {
-            p_group_id: id,
-            p_temp_member_id: tempMemberId,
-            p_user_id: userId,
-          }))
-          return merged
-        }}
-      />
+      <nav className="group-tabs" role="tablist" aria-label="Các mục trong nhóm">
+        {[
+          ['overview', 'Tổng quan'],
+          ['members', 'Thành viên'],
+          ['history', 'Lịch sử'],
+          ['chat', 'Chat'],
+        ].map(([tab, label]) => (
+          <button
+            key={tab}
+            id={`group-tab-${tab}`}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === tab}
+            aria-controls={`group-panel-${tab}`}
+            className={`group-tab ${activeTab === tab ? 'active' : ''}`}
+            onClick={() => setActiveTab(tab)}
+          >
+            {label}
+          </button>
+        ))}
+      </nav>
 
-      <Members
-        members={members}
-        expenses={expenses}
-        payments={payments}
-        onAdd={(names) => run(db.from('members').insert(names.map((name) => ({ group_id: id, name }))))}
-        onDelete={(mid) => run(db.from('members').delete().eq('id', mid))}
-        onBlocked={(msg) => setError(msg)}
-      />
+      {activeTab === 'members' && (
+        <section id="group-panel-members" role="tabpanel" aria-labelledby="group-tab-members">
+          {canManageParticipants && (
+            <form
+              className="card"
+              onSubmit={async (event) => {
+                event.preventDefault()
+                setSavingDescription(true)
+                const saved = await run(db.rpc('update_group_description', {
+                  p_group_id: id,
+                  p_description: descriptionDraft.trim() || null,
+                }))
+                setSavingDescription(false)
+                if (saved) setGroup((current) => ({ ...current, description: descriptionDraft.trim() || null }))
+              }}
+            >
+              <h2>Mô tả nhóm</h2>
+              <p className="muted small-text">Người mở link có thể đọc mô tả trước khi tham gia.</p>
+              <textarea
+                value={descriptionDraft}
+                onChange={(event) => setDescriptionDraft(event.target.value)}
+                maxLength={500}
+                rows={4}
+                placeholder="Giới thiệu mục đích hoặc thông tin cần biết về nhóm…"
+                aria-label="Mô tả nhóm"
+              />
+              <div className="row spread">
+                <span className="muted small-text">{descriptionDraft.length}/500</span>
+                <button disabled={savingDescription}>
+                  {savingDescription ? 'Đang lưu…' : 'Lưu mô tả'}
+                </button>
+              </div>
+            </form>
+          )}
+          <GroupParticipation
+            user={user}
+            participants={groupParticipants}
+            members={members}
+            canManage={canManageParticipants}
+            onJoin={async () => run(db.rpc('join_group', { p_group_id: id }))}
+            onRename={async (name) => run(db.rpc('set_group_member_nickname', { p_group_id: id, p_name: name }))}
+            onMerge={async (tempMemberId, userId) => run(db.rpc('merge_group_temp_member', {
+              p_group_id: id,
+              p_temp_member_id: tempMemberId,
+              p_user_id: userId,
+            }))}
+          />
+          <Members
+            members={members}
+            expenses={expenses}
+            payments={payments}
+            onAdd={(names) => run(db.from('members').insert(names.map((name) => ({ group_id: id, name }))))}
+            onDelete={(mid) => run(db.from('members').delete().eq('id', mid))}
+            onBlocked={(msg) => setError(msg)}
+          />
+        </section>
+      )}
 
+      {activeTab === 'overview' && (
+        <section id="group-panel-overview" role="tabpanel" aria-labelledby="group-tab-overview">
       {members.length >= 2 && (
         <AddExpense
           members={members}
@@ -520,8 +591,22 @@ function Group({ id, user }) {
           </ul>
         </div>
       )}
+        </section>
+      )}
 
-      <AuditHistory entries={auditLog} nameOf={nameOf} groupParticipants={groupParticipants} onLoadMore={() => setAuditLimit((limit) => limit + 100)} canLoadMore={auditLog.length === auditLimit} />
+      {activeTab === 'history' && (
+        <section id="group-panel-history" role="tabpanel" aria-labelledby="group-tab-history">
+          <AuditHistory entries={auditLog} nameOf={nameOf} groupParticipants={groupParticipants} onLoadMore={() => setAuditLimit((limit) => limit + 100)} canLoadMore={auditLog.length === auditLimit} />
+        </section>
+      )}
+
+      {activeTab === 'chat' && (
+        <section id="group-panel-chat" role="tabpanel" aria-labelledby="group-tab-chat">
+          {groupParticipants.some((participant) => participant.user_id === user.id)
+            ? <GroupChat db={db} groupId={id} user={user} />
+            : <div className="card"><h2>Tham gia để chat</h2><p className="muted">Hãy tham gia nhóm trong tab Thành viên để đọc và gửi tin nhắn.</p></div>}
+        </section>
+      )}
 
       {canDeleteGroup && (
         <p className="center">
@@ -540,6 +625,119 @@ const auditEntityNames = {
   group_participants: 'người tham gia',
   expenses: 'khoản chi',
   payments: 'thanh toán',
+}
+
+function GroupChat({ db, groupId, user }) {
+  const [messages, setMessages] = useState([])
+  const [message, setMessage] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [sending, setSending] = useState(false)
+  const [error, setError] = useState('')
+  const bottomRef = useRef(null)
+
+  const loadMessages = useCallback(async (isActive = () => true) => {
+    const { data, error: loadError } = await db
+      .from('group_chat_messages')
+      .select('id,user_id,sender_name,message,created_at')
+      .eq('group_id', groupId)
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .limit(200)
+    if (!isActive()) return
+    if (loadError) setError(loadError.message)
+    else {
+      setError('')
+      setMessages(data.reverse())
+    }
+    setLoading(false)
+  }, [db, groupId])
+
+  useEffect(() => {
+    let active = true
+    const isActive = () => active
+    const refresh = () => loadMessages(isActive)
+    refresh()
+    const channel = supabase
+      .channel(`group-chat-${groupId}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'group_chat_messages',
+        filter: `group_id=eq.${groupId}`,
+      }, refresh)
+      .subscribe()
+    const fallback = setInterval(() => {
+      if (!document.hidden) refresh()
+    }, 15000)
+    return () => {
+      active = false
+      clearInterval(fallback)
+      supabase.removeChannel(channel)
+    }
+  }, [groupId, loadMessages])
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+  }, [messages])
+
+  async function send(event) {
+    event.preventDefault()
+    const text = message.trim()
+    if (!text || sending) return
+    setSending(true)
+    setError('')
+    const { error: sendError } = await db.from('group_chat_messages').insert({
+      group_id: groupId,
+      user_id: user.id,
+      message: text,
+    })
+    if (sendError) setError(sendError.message)
+    else {
+      setMessage('')
+      await loadMessages()
+    }
+    setSending(false)
+  }
+
+  return (
+    <div className="card group-chat">
+      <div className="row spread">
+        <div>
+          <h2>Chat nhóm</h2>
+          <p className="muted small-text">Tin nhắn được lưu trong nhóm; tối đa 200 tin gần nhất được hiển thị.</p>
+        </div>
+      </div>
+      {error && <p className="error" role="alert">{error}</p>}
+      <ol className="chat-messages" aria-live="polite" aria-busy={loading}>
+        {loading ? <li className="muted">Đang tải tin nhắn…</li>
+          : messages.length === 0 ? <li className="muted">Chưa có tin nhắn. Bắt đầu trò chuyện nhé.</li>
+            : messages.map((entry) => (
+              <li key={entry.id} className={`chat-message ${entry.user_id === user.id ? 'own' : ''}`}>
+                <div className="chat-message-heading">
+                  <b>{entry.sender_name}</b>
+                  <time className="muted small-text" dateTime={entry.created_at}>{formatTime(entry.created_at)}</time>
+                </div>
+                <p>{entry.message}</p>
+              </li>
+            ))}
+        <li className="chat-bottom" ref={bottomRef} aria-hidden="true" />
+      </ol>
+      <form className="chat-compose" onSubmit={send}>
+        <textarea
+          value={message}
+          onChange={(event) => setMessage(event.target.value)}
+          placeholder="Nhập tin nhắn…"
+          maxLength={1000}
+          rows={3}
+          aria-label="Tin nhắn"
+        />
+        <div className="row spread">
+          <span className="muted small-text">{message.length}/1000</span>
+          <button disabled={sending || !message.trim()}>{sending ? 'Đang gửi…' : 'Gửi'}</button>
+        </div>
+      </form>
+    </div>
+  )
 }
 
 const auditFieldNames = {

@@ -54,8 +54,10 @@ Workflow chạy test và build trước khi deploy. Nếu thiếu secrets Supaba
 - Người tạo nhóm được lưu bằng Supabase Auth user ID và là người duy nhất (ngoài system admin) có quyền xoá nhóm.
 - Những tài khoản Google đã đăng nhập và có link nhóm (`#/g/<uuid>`) đều có thể xem/sửa dữ liệu, thành viên, khoản chi và thanh toán của nhóm. Link vẫn là bearer secret; không có cơ chế mời hoặc phân quyền thành viên.
 - Người mở link có thể bấm **Tham gia nhóm** để tạo thành viên chính bằng tên Google; mỗi người có thể tự đổi nickname riêng trong nhóm. Chủ nhóm có thể gộp nickname tạm vào tài khoản đã tham gia. Gộp sẽ chuyển khoản chi/thanh toán sang thành viên tài khoản, lấy nickname tạm làm tên hiển thị rồi xoá thành viên tạm trong cùng transaction.
+- Mô tả nhóm (tối đa 500 ký tự) hiển thị cho người mở link; chỉ chủ nhóm hoặc system admin được cập nhật.
 - `thehoach92@gmail.com` là system admin: có thể xem, sửa và xoá mọi nhóm, kể cả không có link; trang chủ liệt kê nhóm theo từng trang 100 nhóm.
 - Mọi thêm/sửa/xoá nhóm, thành viên, khoản chi và thanh toán được ghi vào `group_audit_log` bằng trigger Postgres. Nhật ký chỉ đọc qua ứng dụng, không cho sửa/xoá, và bản ghi sự kiện xoá nhóm vẫn được giữ lại.
+- Mỗi nhóm có tab chat văn bản; người đăng nhập đã tham gia nhóm có thể gửi và xem 200 tin gần nhất. Tin nhắn được lưu bất biến và cập nhật qua Supabase Realtime (có làm mới dự phòng).
 - Các nhóm được tạo trước khi bật đăng nhập không có chủ sở hữu xác định. Người Google đầu tiên mở được link sẽ nhận quyền sở hữu nhóm đó.
 
 `anon key` là khoá công khai theo thiết kế của Supabase, để trong code front-end là bình thường. OAuth Client Secret được lưu trong Supabase Dashboard. **Không bao giờ** đưa `service_role` key hay OAuth Client Secret vào repo hoặc frontend.
@@ -68,6 +70,9 @@ Workflow chạy test và build trước khi deploy. Nếu thiếu secrets Supaba
 - Xoá thành viên chỉ làm được khi người đó chưa có trong khoản chi hay thanh toán nào.
 - Khi cập nhật database hiện tại để có chức năng tham gia/gán nickname, chạy migration `supabase/migrations/20261011000002_group_participants.sql`.
 - Chạy migration `supabase/migrations/20261011000003_member_accounts_and_merge.sql` để thêm thành viên tài khoản, tự đặt nickname và gộp/xoá nickname tạm.
+- Chạy migration `supabase/migrations/20261011000004_creator_auto_member.sql` để người tạo nhóm tự có thành viên chính ngay khi tạo nhóm; migration cũng thêm thành viên chính cho các nhóm hiện có.
+- Chạy migration `supabase/migrations/20261011000005_group_chat.sql` để bật chat nhóm và Realtime.
+- Chạy migration `supabase/migrations/20261011000006_group_description.sql` để thêm mô tả nhóm và quyền cập nhật dành cho chủ nhóm.
 - `supabase/schema.sql` là schema khởi tạo; thay đổi cho project đã có dữ liệu phải đi qua migration trong `supabase/migrations/`.
 
 ## Test

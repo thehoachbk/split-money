@@ -18,17 +18,28 @@ Giúp một nhóm bạn ghi lại chi tiêu chung, biết mỗi người đang n
 - Người dùng đăng nhập bằng Google qua Supabase Auth OAuth.
 - Session được duy trì trong trình duyệt; người dùng có thể đăng xuất.
 - Tạo nhóm ghi `auth.uid()` của người tạo vào `groups.created_by`.
+- Người tạo nhóm tự động được đăng ký là người tham gia và có thành viên chính với nickname mặc định từ tên Google.
 - Các Google account chưa được mời nhưng có link vẫn có quyền sửa nhóm; MVP chưa có danh sách thành viên được mời hoặc thu hồi link.
 
 ## Luồng chính
+
+### Các tab trong nhóm
+
+- Trang nhóm chia thành các tab Tổng quan, Thành viên, Lịch sử và Chat.
+- Tổng quan chứa khoản chi, cân bằng và thanh toán đề xuất/đã ghi nhận.
+- Thành viên chứa danh sách thành viên, thao tác tham gia, nickname cá nhân và gộp nickname tạm.
+- Lịch sử chỉ hiển thị audit log.
+- Chat chứa hội thoại nhóm.
+- Mô tả nhóm được hiển thị ở đầu trang cho người mở link trước khi tham gia; chủ nhóm và system admin có thể cập nhật trong tab Thành viên.
 
 ### Tạo và truy cập nhóm
 
 1. Tại trang chủ, người dùng nhập tên nhóm và tạo nhóm.
 2. Ứng dụng tạo UUID ngẫu nhiên, lưu nhóm trên Supabase và chuyển tới route dạng `#/g/<uuid>`.
 3. Người dùng có thể sao chép link để chia sẻ. Người nhận link có thể mở nhóm trên thiết bị của họ.
-4. Trình duyệt lưu tối đa 20 nhóm gần đây trong `localStorage`. Xoá một mục khỏi danh sách gần đây không xoá nhóm trên máy chủ.
-5. Nếu Supabase chưa được cấu hình, trang chủ hiển thị hướng dẫn cấu hình. Nếu nhóm không tồn tại, trang nhóm thông báo không tìm thấy và đưa đường dẫn về trang chủ.
+4. Mô tả tuỳ chọn dài tối đa 500 ký tự giúp người nhận link hiểu mục đích nhóm trước khi tham gia.
+5. Trình duyệt lưu tối đa 20 nhóm gần đây trong `localStorage`. Xoá một mục khỏi danh sách gần đây không xoá nhóm trên máy chủ.
+6. Nếu Supabase chưa được cấu hình, trang chủ hiển thị hướng dẫn cấu hình. Nếu nhóm không tồn tại, trang nhóm thông báo không tìm thấy và đưa đường dẫn về trang chủ.
 
 ### Quản lý thành viên
 
@@ -69,6 +80,13 @@ Giúp một nhóm bạn ghi lại chi tiêu chung, biết mỗi người đang n
 - Hiển thị 100 sự kiện mỗi lần và có thể tải tiếp các sự kiện cũ hơn.
 - Sự kiện xoá nhóm được giữ lại trong audit log độc lập với vòng đời dữ liệu nhóm; mở lại link nhóm đã xoá chỉ xem được lịch sử, không khôi phục nhóm.
 
+### Chat nhóm
+
+- Tài khoản Google đã đăng nhập và tham gia nhóm có thể đọc, gửi tin nhắn văn bản tối đa 1000 ký tự.
+- Người gửi hiển thị nickname trong nhóm tại thời điểm gửi; nếu chưa có thành viên tài khoản thì dùng tên Google.
+- Lưu và hiển thị tối đa 200 tin nhắn mới nhất; tin mới đến qua Supabase Realtime cho thành viên đã tham gia, có làm mới dự phòng định kỳ.
+- Tin chat bất biến trong ứng dụng: không hỗ trợ sửa hoặc xoá. Xoá nhóm sẽ xoá tin nhắn cùng dữ liệu hiện hành của nhóm.
+
 ## Trạng thái và lỗi
 
 - Khi tải dữ liệu, hiển thị trạng thái đang tải.
@@ -76,11 +94,13 @@ Giúp một nhóm bạn ghi lại chi tiêu chung, biết mỗi người đang n
 - Khi tải nhóm lần đầu thất bại, cho phép thử lại.
 - Nếu chưa có khoản chi, hiển thị trạng thái rỗng phù hợp; nếu số dư đã cân bằng, thông báo không ai nợ ai.
 - Dữ liệu giữa các thiết bị được làm mới bằng polling mỗi 15 giây khi tab đang hiển thị; không phải realtime tức thì.
+- Chat nhận cập nhật qua Realtime, polling định kỳ là dự phòng khi tab đang hiển thị.
 
 ## Quy tắc dữ liệu
 
 - Đơn vị tiền duy nhất là VND, lưu và tính dưới dạng số nguyên.
 - Tên nhóm: 1–80 ký tự. Tên thành viên: 1–40 ký tự. Nội dung khoản chi: 1–120 ký tự.
+- Mô tả nhóm không bắt buộc, tối đa 500 ký tự; chỉ chủ nhóm hoặc system admin được cập nhật.
 - Khoản chi và thanh toán phải có số tiền lớn hơn 0.
 - Xoá nhóm xoá dữ liệu hiện hành của nhóm và thành viên/khoản chi/thanh toán; audit log được giữ lại.
 - Các nhóm cũ chưa có `created_by` cho phép Google user đầu tiên mở được link nhận quyền sở hữu.

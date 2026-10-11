@@ -361,6 +361,8 @@ function Group({ id, user }) {
   const isSystemAdmin = hasSystemAdminAccess(user)
   const canDeleteGroup = group?.created_by === user.id || isSystemAdmin
   const canManageParticipants = group?.created_by === user.id || isSystemAdmin
+  const isGroupParticipant = groupParticipants.some((participant) => participant.user_id === user.id)
+  const canEditGroup = isGroupParticipant || isSystemAdmin
 
   if (loading) return <p className="muted center">Đang tải…</p>
   if (error && !group)
@@ -417,7 +419,12 @@ function Group({ id, user }) {
             {copied ? 'Đã copy ✓' : 'Copy link nhóm'}
           </button>
         </div>
-        <p className="muted small-text">Người đăng nhập Google có link này đều xem và chỉnh sửa được nhóm. Chỉ người tạo nhóm và system admin mới xoá được nhóm.</p>
+        <p className="muted small-text">Người đăng nhập có link nhóm có thể xem dữ liệu. Cần tham gia nhóm để chỉnh sửa; chỉ người tạo nhóm và system admin mới được xoá nhóm.</p>
+        {!canEditGroup && (
+          <p className="muted" role="status">
+            Bạn đang xem nhóm ở chế độ chỉ đọc. Vào tab Thành viên và tham gia nhóm để có thể chỉnh sửa.
+          </p>
+        )}
         {error && (
           <p className="error">
             {error} <button className="ghost small" onClick={() => setError('')}>Ẩn</button>
@@ -449,7 +456,7 @@ function Group({ id, user }) {
 
       {activeTab === 'members' && (
         <section id="group-panel-members" role="tabpanel" aria-labelledby="group-tab-members">
-          {canManageParticipants && (
+          {canManageParticipants && canEditGroup && (
             <form
               className="card"
               onSubmit={async (event) => {
@@ -481,7 +488,7 @@ function Group({ id, user }) {
               </div>
             </form>
           )}
-          {canManageParticipants && (
+          {canManageParticipants && canEditGroup && (
             <GroupTransferAccountForm
               group={group}
               onSave={async (account) => {
@@ -526,6 +533,7 @@ function Group({ id, user }) {
             participants={groupParticipants}
             expenses={expenses}
             payments={payments}
+            canEdit={canEditGroup}
             onAdd={(names) => run(db.from('members').insert(names.map((name) => ({ group_id: id, name }))))}
             onDelete={(mid) => run(db.from('members').delete().eq('id', mid))}
             onBlocked={(msg) => setError(msg)}
@@ -535,7 +543,7 @@ function Group({ id, user }) {
 
       {activeTab === 'overview' && (
         <section id="group-panel-overview" role="tabpanel" aria-labelledby="group-tab-overview">
-      {members.length >= 2 && (
+      {canEditGroup && members.length >= 2 && (
         <AddExpense
           members={members}
           onAdd={(row) => run(db.from('expenses').insert({ group_id: id, ...row }))}
@@ -580,7 +588,7 @@ function Group({ id, user }) {
         ) : (
           <ul className="list">
             {expenses.map((e) => {
-                return <ExpenseRow key={e.id} expense={e} members={members} nameOf={nameOf} onSave={(values) => run(db.from('expenses').update(values).eq('id', e.id))} onDelete={() => run(db.from('expenses').delete().eq('id', e.id))} />
+                return <ExpenseRow key={e.id} expense={e} members={members} nameOf={nameOf} canEdit={canEditGroup} onSave={(values) => run(db.from('expenses').update(values).eq('id', e.id))} onDelete={() => run(db.from('expenses').delete().eq('id', e.id))} />
             })}
           </ul>
         )}
@@ -591,7 +599,7 @@ function Group({ id, user }) {
           <h2>Đã thanh toán</h2>
           <ul className="list">
             {payments.map((p) => (
-              <PaymentRow key={p.id} payment={p} members={members} nameOf={nameOf} onSave={(values) => run(db.from('payments').update(values).eq('id', p.id))} onDelete={() => run(db.from('payments').delete().eq('id', p.id))} />
+              <PaymentRow key={p.id} payment={p} members={members} nameOf={nameOf} canEdit={canEditGroup} onSave={(values) => run(db.from('payments').update(values).eq('id', p.id))} onDelete={() => run(db.from('payments').delete().eq('id', p.id))} />
             ))}
           </ul>
         </div>
@@ -613,7 +621,7 @@ function Group({ id, user }) {
         </section>
       )}
 
-      {canDeleteGroup && (
+      {canDeleteGroup && (canEditGroup || isSystemAdmin) && (
         <p className="center">
           <button className="ghost danger" onClick={deleteGroup}>
             Xoá nhóm này
@@ -1016,7 +1024,7 @@ function GroupParticipation({ user, participants, members, canManage, groupOwner
   )
 }
 
-function ExpenseRow({ expense, members, nameOf, onSave, onDelete }) {
+function ExpenseRow({ expense, members, nameOf, canEdit, onSave, onDelete }) {
   const [editing, setEditing] = useState(false)
   const [description, setDescription] = useState(expense.description)
   const [amount, setAmount] = useState(String(expense.amount))
@@ -1049,7 +1057,7 @@ function ExpenseRow({ expense, members, nameOf, onSave, onDelete }) {
     if (success) setEditing(false)
   }
 
-  if (editing) {
+  if (editing && canEdit) {
     return (
       <li>
         <form className="edit-form" onSubmit={save}>
@@ -1104,14 +1112,16 @@ function ExpenseRow({ expense, members, nameOf, onSave, onDelete }) {
       </span>
       <span className="row gap">
         <b className="money">{formatVND(expense.amount)}</b>
-        <button className="ghost small" onClick={() => setEditing(true)}>Sửa</button>
-        <button className="ghost small danger" title="Xoá khoản chi" onClick={() => window.confirm(`Xoá “${expense.description}”?`) && onDelete()}>✕</button>
+        {canEdit && <>
+          <button className="ghost small" onClick={() => setEditing(true)}>Sửa</button>
+          <button className="ghost small danger" title="Xoá khoản chi" onClick={() => window.confirm(`Xoá “${expense.description}”?`) && onDelete()}>✕</button>
+        </>}
       </span>
     </li>
   )
 }
 
-function PaymentRow({ payment, members, nameOf, onSave, onDelete }) {
+function PaymentRow({ payment, members, nameOf, canEdit, onSave, onDelete }) {
   const [editing, setEditing] = useState(false)
   const [fromMember, setFromMember] = useState(payment.from_member)
   const [toMember, setToMember] = useState(payment.to_member)
@@ -1135,7 +1145,7 @@ function PaymentRow({ payment, members, nameOf, onSave, onDelete }) {
     if (success) setEditing(false)
   }
 
-  if (editing) {
+  if (editing && canEdit) {
     return (
       <li>
         <form className="edit-form" onSubmit={save}>
@@ -1169,14 +1179,16 @@ function PaymentRow({ payment, members, nameOf, onSave, onDelete }) {
       </span>
       <span className="row gap">
         <b className="money">{formatVND(payment.amount)}</b>
-        <button className="ghost small" onClick={() => setEditing(true)}>Sửa</button>
-        <button className="ghost small danger" title="Huỷ ghi nhận" onClick={() => window.confirm('Huỷ ghi nhận thanh toán này?') && onDelete()}>✕</button>
+        {canEdit && <>
+          <button className="ghost small" onClick={() => setEditing(true)}>Sửa</button>
+          <button className="ghost small danger" title="Huỷ ghi nhận" onClick={() => window.confirm('Huỷ ghi nhận thanh toán này?') && onDelete()}>✕</button>
+        </>}
       </span>
     </li>
   )
 }
 
-function Members({ members, participants = [], expenses, payments, onAdd, onDelete, onBlocked }) {
+function Members({ members, participants = [], expenses, payments, canEdit, onAdd, onDelete, onBlocked }) {
   const [text, setText] = useState('')
 
   async function submit(e) {
@@ -1212,20 +1224,22 @@ function Members({ members, participants = [], expenses, payments, onAdd, onDele
                 <span className="muted small-text" title={participants.some((participant) => participant.user_id === m.account_id) ? 'Tài khoản đang tham gia nhóm' : 'Tài khoản đã rời danh sách tham gia'}>
                   {participants.some((participant) => participant.user_id === m.account_id) ? '· tài khoản' : '· đã rời nhóm'}
                 </span>
-              ) : <button className="ghost small" onClick={() => remove(m)} title="Xoá">✕</button>}
+              ) : canEdit && <button className="ghost small" onClick={() => remove(m)} title="Xoá">✕</button>}
             </span>
           ))}
         </div>
       )}
-      <form className="row" onSubmit={submit}>
-        <input
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder={members.length ? 'Thêm người (có thể nhập nhiều tên, cách nhau bằng dấu phẩy)' : 'Nhập tên các thành viên, cách nhau bằng dấu phẩy'}
-          maxLength={200}
-        />
-        <button disabled={!text.trim()}>Thêm</button>
-      </form>
+      {canEdit
+        ? <form className="row" onSubmit={submit}>
+          <input
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder={members.length ? 'Thêm người (có thể nhập nhiều tên, cách nhau bằng dấu phẩy)' : 'Nhập tên các thành viên, cách nhau bằng dấu phẩy'}
+            maxLength={200}
+          />
+          <button disabled={!text.trim()}>Thêm</button>
+        </form>
+        : <p className="muted small-text">Tham gia nhóm để thêm hoặc xoá thành viên.</p>}
       {members.length < 2 && <p className="muted small-text">Cần ít nhất 2 người để bắt đầu thêm khoản chi.</p>}
     </div>
   )

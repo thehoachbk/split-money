@@ -9,7 +9,7 @@ Giúp một nhóm bạn ghi lại chi tiêu chung, biết mỗi người đang n
 - Người dùng chính là nhóm nhỏ muốn theo dõi chi phí chung, ví dụ chuyến đi hoặc tiền sinh hoạt.
 - Giao diện và nội dung hướng tới người dùng tiếng Việt.
 - Người dùng phải đăng nhập Google.
-- Link nhóm là bí mật dạng bearer: bất kỳ tài khoản Google đã đăng nhập nào có link đều có thể xem/sửa dữ liệu của nhóm. Tham gia nhóm chỉ ghi nhận tài khoản để chủ nhóm sắp xếp nickname; không thay đổi quyền truy cập theo link.
+- Link nhóm cho phép tài khoản Google đã đăng nhập xem trước nhóm, nhưng không tự cấp quyền chỉnh sửa. Người dùng phải tham gia nhóm trước khi sửa dữ liệu; system admin có thể quản trị mọi nhóm.
 - Người tạo nhóm là chủ sở hữu và chỉ họ mới được xoá nhóm, ngoài system admin.
 - Tài khoản Google `thehoach92@gmail.com` là system admin, có quyền xem/sửa/xoá mọi nhóm kể cả không có link.
 
@@ -19,7 +19,7 @@ Giúp một nhóm bạn ghi lại chi tiêu chung, biết mỗi người đang n
 - Session được duy trì trong trình duyệt; người dùng có thể đăng xuất.
 - Tạo nhóm ghi `auth.uid()` của người tạo vào `groups.created_by`.
 - Người tạo nhóm tự động được đăng ký là người tham gia và có thành viên chính với nickname mặc định từ tên Google.
-- Các Google account chưa được mời nhưng có link vẫn có quyền sửa nhóm; MVP chưa có danh sách thành viên được mời hoặc thu hồi link.
+- Các Google account chưa được mời nhưng có link vẫn có thể xem dữ liệu và tự tham gia; trước khi tham gia chỉ có quyền đọc.
 
 ## Luồng chính
 
@@ -48,6 +48,7 @@ Giúp một nhóm bạn ghi lại chi tiêu chung, biết mỗi người đang n
 - Mỗi người tự đặt/đổi nickname của thành viên tài khoản trong từng nhóm. Nickname chỉ là tên hiển thị cục bộ, không thay đổi hồ sơ Google.
 - Chủ nhóm hoặc system admin có thể gộp nickname tạm chưa gắn tài khoản vào thành viên tài khoản đã tham gia. Gộp chuyển người trả, người tham gia khoản chi và hai đầu thanh toán sang thành viên tài khoản; khoản thanh toán giữa hai bản ghi được loại bỏ vì hai người trở thành một. Tên nickname tạm được giữ làm tên của thành viên tài khoản; bản ghi tạm bị xoá trong cùng transaction.
 - Chủ nhóm hoặc system admin có thể xoá tài khoản khỏi danh sách tham gia (trừ chủ nhóm). Tài khoản bị gỡ không còn quyền chat; thành viên tài chính chỉ bị xoá nếu chưa được dùng trong khoản chi/thanh toán, nếu đã được dùng thì giữ lại để bảo toàn số dư và lịch sử. Người có link vẫn có thể tham gia lại theo chính sách link nhóm hiện tại.
+- Người có link nhưng chưa tham gia chỉ xem được nhóm và không thể thêm, sửa hoặc xoá thành viên, khoản chi, thanh toán, mô tả hay tài khoản nhận tiền. Quyền ghi được kiểm tra ở UI, RLS và trigger database; người đã tham gia mới được sửa dữ liệu nhóm.
 - Mỗi tài khoản chỉ có một thành viên chính trong một nhóm; một nickname tạm chỉ có thể được gộp một lần. Các nhóm khác có thành viên và nickname độc lập.
 - Tên thành viên dài tối đa 40 ký tự theo database.
 - Cần tối thiểu hai thành viên để nhập khoản chi; số dư vẫn hiển thị theo từng thành viên.
@@ -117,7 +118,7 @@ Giúp một nhóm bạn ghi lại chi tiêu chung, biết mỗi người đang n
 ## Tiêu chí chấp nhận
 
 - Người dùng có thể đăng nhập Google, tạo nhóm, chia sẻ link và mở cùng dữ liệu nhóm trên thiết bị khác.
-- Người chưa đăng nhập không thể đọc/ghi dữ liệu nhóm. Tài khoản đã đăng nhập cần đúng `x-group-id` để thao tác nhóm, trừ system admin.
+- Người chưa đăng nhập không thể đọc/ghi dữ liệu nhóm. Người có link nhưng chưa tham gia chỉ đọc; chỉ thành viên đã tham gia hoặc system admin được chỉnh sửa dữ liệu.
 - Tài khoản không phải chủ nhóm không thể xoá nhóm; system admin có thể xoá mọi nhóm.
 - Thành viên có thể thêm; thành viên đã được tham chiếu không thể xoá cho tới khi dữ liệu tham chiếu được xoá.
 - Người có link có thể tham gia nhóm để tạo thành viên chính, tự đặt nickname trong nhóm, và chủ nhóm có thể gộp nickname tạm vào tài khoản.

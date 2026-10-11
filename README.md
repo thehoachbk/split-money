@@ -51,7 +51,7 @@ Workflow chạy test và build trước khi deploy. Nếu thiếu secrets Supaba
 
 - Người dùng phải đăng nhập Google để dùng ứng dụng.
 - Người tạo nhóm được lưu bằng Supabase Auth user ID và là người duy nhất (ngoài system admin) có quyền xoá nhóm.
-- Những tài khoản Google đã đăng nhập và có link nhóm (`#/g/<uuid>`) đều có thể xem/sửa dữ liệu, thành viên, khoản chi và thanh toán của nhóm. Link vẫn là bearer secret; không có cơ chế mời hoặc phân quyền thành viên.
+- Tài khoản Google đã đăng nhập và có link nhóm (`#/g/<uuid>`) có thể xem nhóm trước khi tham gia; chỉ người đã tham gia mới được sửa dữ liệu, thành viên, khoản chi và thanh toán. Link vẫn cho phép xem trước, không thay thế bước tham gia.
 - Người mở link có thể bấm **Tham gia nhóm** để tạo thành viên chính bằng tên Google; mỗi người có thể tự đổi nickname riêng trong nhóm. Chủ nhóm có thể gộp nickname tạm vào tài khoản đã tham gia. Gộp sẽ chuyển khoản chi/thanh toán sang thành viên tài khoản, lấy nickname tạm làm tên hiển thị rồi xoá thành viên tạm trong cùng transaction.
 - Chủ nhóm hoặc system admin có thể xoá người tham gia khỏi danh sách nhóm. Quyền chat bị thu hồi; dữ liệu chi tiêu cũ được giữ nguyên (thành viên tài chính chỉ bị xoá nếu chưa được dùng).
 - Mô tả nhóm (tối đa 500 ký tự) hiển thị cho người mở link; chỉ chủ nhóm hoặc system admin được cập nhật.
@@ -59,7 +59,7 @@ Workflow chạy test và build trước khi deploy. Nếu thiếu secrets Supaba
 - `thehoach92@gmail.com` là system admin: có thể xem, sửa và xoá mọi nhóm, kể cả không có link; trang chủ liệt kê nhóm theo từng trang 100 nhóm.
 - Mọi thêm/sửa/xoá nhóm, thành viên, khoản chi và thanh toán được ghi vào `group_audit_log` bằng trigger Postgres. Nhật ký chỉ đọc qua ứng dụng, không cho sửa/xoá, và bản ghi sự kiện xoá nhóm vẫn được giữ lại.
 - Mỗi nhóm có tab chat văn bản; người đăng nhập đã tham gia nhóm có thể gửi và xem 200 tin gần nhất. Tin nhắn được lưu bất biến và cập nhật qua Supabase Realtime (có làm mới dự phòng).
-- Các nhóm được tạo trước khi bật đăng nhập không có chủ sở hữu xác định. Người Google đầu tiên mở được link sẽ nhận quyền sở hữu nhóm đó.
+- Các nhóm được tạo trước khi bật đăng nhập không có chủ sở hữu xác định. Người Google đầu tiên mở được link có thể nhận quyền sở hữu, nhưng vẫn phải tham gia nhóm để chỉnh sửa dữ liệu.
 
 `anon key` là khoá công khai theo thiết kế của Supabase, để trong code front-end là bình thường. OAuth Client Secret được lưu trong Supabase Dashboard. **Không bao giờ** đưa `service_role` key hay OAuth Client Secret vào repo hoặc frontend.
 
@@ -76,6 +76,8 @@ Workflow chạy test và build trước khi deploy. Nếu thiếu secrets Supaba
 - Chạy migration `supabase/migrations/20261011000006_group_description.sql` để thêm mô tả nhóm và quyền cập nhật dành cho chủ nhóm.
 - Chạy migration `supabase/migrations/20261011000007_remove_group_participant.sql` để chủ nhóm có thể gỡ tài khoản đã tham gia mà vẫn bảo toàn lịch sử chi tiêu.
 - Chạy migration `supabase/migrations/20261011000008_group_transfer_account.sql` để thêm tài khoản nhận tiền chung cho nhóm.
+- Chạy migration `supabase/migrations/20261011000009_require_group_participation_to_edit.sql` để chỉ cho phép người đã tham gia nhóm chỉnh sửa dữ liệu.
+- Chạy migration `supabase/migrations/20261011000010_claimed_owners_participate.sql` để người nhận quyền sở hữu nhóm cũ tự động được đăng ký tham gia và có thành viên chính.
 - `supabase/schema.sql` là schema khởi tạo; thay đổi cho project đã có dữ liệu phải đi qua migration trong `supabase/migrations/`.
 
 ## Test

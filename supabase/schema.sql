@@ -1,5 +1,7 @@
 -- Chỉ dùng trên database mới, sau đó chạy migration trong supabase/migrations ngay.
 -- File này vẫn tạo các bảng nền; migration áp dụng RLS/auth/audit hoàn chỉnh.
+-- Đặc biệt, không dừng sau file này: migration 00009/00010 yêu cầu tham gia nhóm
+-- trước khi ghi dữ liệu và bảo đảm chủ sở hữu nhóm cũ cũng là người tham gia.
 
 create table if not exists public.groups (
   id         uuid primary key,

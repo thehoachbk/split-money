@@ -25,16 +25,13 @@
 
 ### Trang nhóm
 
-Theo thứ tự:
-
-1. Tóm tắt tên nhóm, số thành viên, số khoản chi, tổng chi; nút sao chép link và nhắc về quyền truy cập bằng link.
-2. Danh sách thành viên dạng chip và form thêm người.
-3. Form khoản chi khi có ít nhất hai thành viên; gồm nội dung, số tiền, người trả và lựa chọn người tham gia.
-4. Card tài khoản chung và số dư từng người; số âm là cần chuyển vào tài khoản chung, số dương là được nhận từ tài khoản chung.
-5. Danh sách khoản chi mới nhất trước, có thao tác sửa và xoá.
-6. Danh sách thanh toán đã ghi nhận khi có dữ liệu, có thao tác sửa và xoá.
-7. Card lịch sử thay đổi hiển thị actor, thời gian, loại hành động và giá trị liên quan trước/sau; tải theo từng trang 100 hoạt động.
-8. Nút xoá nhóm chỉ hiển thị cho người tạo hoặc system admin.
+1. Tóm tắt tên, mô tả, số thành viên, số khoản chi, tổng chi; nút sao chép link và trạng thái quyền truy cập.
+2. Tab Tổng quan gồm khoản chi, tài khoản nhận tiền chung, số dư và các thanh toán đã ghi nhận.
+3. Tab Thành viên gồm danh sách thành viên, tham gia nhóm, nickname cá nhân và các tác vụ chỉ dành cho người có quyền.
+4. Tab Lịch sử hiển thị actor, thời gian, loại hành động và snapshot trước/sau; tải theo từng trang 100 hoạt động.
+5. Tab Chat dành cho người đã tham gia nhóm.
+6. Người có link nhưng chưa tham gia chỉ xem; thông báo hướng dẫn họ vào tab Thành viên để tham gia trước khi sửa.
+7. Nút xoá nhóm chỉ hiển thị cho người tạo hoặc system admin.
 
 ### Đăng nhập và session
 
@@ -61,6 +58,7 @@ Theo thứ tự:
 - Một Supabase client giữ session Auth; fetch wrapper thêm `x-group-id` theo nhóm đang hoạt động để đáp ứng chính sách RLS.
 - State nhóm và audit log được tải từ Supabase; sau thao tác ghi thành công, tải lại dữ liệu. Tab đang hiển thị polling mỗi 15 giây.
 - Chủ nhóm/system admin có thể gỡ tài khoản khỏi danh sách tham gia bằng RPC bảo vệ quyền; thành viên còn được khoản chi/thanh toán tham chiếu được giữ để bảo toàn sổ sách, nhưng mất quyền chat.
+- Người có link nhưng chưa tham gia chỉ xem; biểu ngữ hướng dẫn họ vào tab Thành viên để tham gia trước khi hiện các thao tác ghi.
 
 ## Supabase và dữ liệu
 
@@ -82,7 +80,7 @@ Các ràng buộc chi tiết và index nằm trong `supabase/schema.sql`. Thay �
 - Tạo nhóm gắn `created_by=auth.uid()`. Xoá nhóm chỉ qua RPC bảo vệ chủ sở hữu/admin; RPC xoá child records theo thứ tự để giữ audit trigger.
 - Thông tin tài khoản nhận tiền chung được cập nhật qua RPC giới hạn chủ nhóm/system admin; người có quyền đọc nhóm xem được các trường ngân hàng, số tài khoản và chủ tài khoản.
 - Trigger `public.log_group_change()` lưu actor và before/after snapshots. Audit log chỉ grant `SELECT` và trigger ngăn UPDATE/DELETE.
-- Link vẫn là bearer secret giữa các tài khoản đã đăng nhập; người dùng có link có thể thay đổi dữ liệu. Không mô tả như hệ thống lời mời/phân quyền.
+- Link cho phép tài khoản đã đăng nhập xem trước; RLS và trigger yêu cầu có bản ghi tham gia để sửa dữ liệu. Link không thay thế bước tham gia và không phải lời mời riêng.
 - `anon key` được dùng ở client browser và không phải bí mật. Không đưa `service_role` key vào frontend, Git hoặc tài liệu.
 
 ## Cấu hình và triển khai

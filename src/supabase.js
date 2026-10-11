@@ -18,7 +18,7 @@ export const supabase = isConfigured
           return fetch(input, { ...init, headers })
         },
       },
-      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: 'pkce' },
     })
   : null
 

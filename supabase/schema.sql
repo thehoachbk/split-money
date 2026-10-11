@@ -12,7 +12,18 @@ create table if not exists public.members (
   id         uuid primary key default gen_random_uuid(),
   group_id   uuid not null references public.groups(id) on delete cascade,
   name       text not null check (char_length(name) between 1 and 40),
+  account_id uuid references auth.users(id) on delete set null,
   created_at timestamptz not null default now()
+);
+
+create table if not exists public.group_participants (
+  id           uuid primary key default gen_random_uuid(),
+  group_id     uuid not null references public.groups(id) on delete cascade,
+  user_id      uuid not null references auth.users(id) on delete cascade,
+  display_name text,
+  email        text,
+  joined_at    timestamptz not null default now(),
+  unique (group_id, user_id)
 );
 
 create table if not exists public.expenses (
@@ -35,6 +46,11 @@ create table if not exists public.payments (
 );
 
 create index if not exists members_group_idx  on public.members(group_id);
+create unique index if not exists members_group_account_idx
+  on public.members(group_id, account_id)
+  where account_id is not null;
+create index if not exists group_participants_group_joined_idx
+  on public.group_participants(group_id, joined_at);
 create index if not exists expenses_group_idx on public.expenses(group_id);
 create index if not exists payments_group_idx on public.payments(group_id);
 

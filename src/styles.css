@@ -230,6 +230,10 @@ button.small {
   border-bottom: 0;
 }
 
+.participant-member-select {
+  max-width: 220px;
+}
+
 .audit-list .audit-entry {
   display: block;
 }

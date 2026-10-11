@@ -9,7 +9,7 @@ Giúp một nhóm bạn ghi lại chi tiêu chung, biết mỗi người đang n
 - Người dùng chính là nhóm nhỏ muốn theo dõi chi phí chung, ví dụ chuyến đi hoặc tiền sinh hoạt.
 - Giao diện và nội dung hướng tới người dùng tiếng Việt.
 - Người dùng phải đăng nhập Google.
-- Link nhóm là bí mật dạng bearer: bất kỳ tài khoản Google đã đăng nhập nào có link đều có thể xem/sửa dữ liệu của nhóm.
+- Link nhóm là bí mật dạng bearer: bất kỳ tài khoản Google đã đăng nhập nào có link đều có thể xem/sửa dữ liệu của nhóm. Tham gia nhóm chỉ ghi nhận tài khoản để chủ nhóm sắp xếp nickname; không thay đổi quyền truy cập theo link.
 - Người tạo nhóm là chủ sở hữu và chỉ họ mới được xoá nhóm, ngoài system admin.
 - Tài khoản Google `thehoach92@gmail.com` là system admin, có quyền xem/sửa/xoá mọi nhóm kể cả không có link.
 
@@ -33,6 +33,9 @@ Giúp một nhóm bạn ghi lại chi tiêu chung, biết mỗi người đang n
 ### Quản lý thành viên
 
 - Có thể thêm một hoặc nhiều tên trong cùng một lần; phân cách tên bằng dấu phẩy hoặc xuống dòng.
+- Người mở link có thể bấm “Tham gia nhóm” để ghi nhận tài khoản Google của họ mà không phải tự chọn nickname.
+- Người tạo nhóm có thể gán tài khoản đã tham gia vào một nickname có sẵn, đổi nickname hoặc bỏ gán. Việc gán chỉ áp dụng trong nhóm đó; nickname vẫn là tên hiển thị riêng của nhóm, không thay đổi hồ sơ Google.
+- Một tài khoản và một nickname chỉ được liên kết với tối đa một đối tượng trong cùng nhóm. Chủ nhóm quản lý liên kết này; nhóm khác có thể dùng nickname và liên kết riêng.
 - Tên thành viên dài tối đa 40 ký tự theo database.
 - Cần tối thiểu hai thành viên để nhập khoản chi và xem cân bằng/đề xuất thanh toán.
 - Không thể xoá thành viên đang được dùng làm người trả, người tham gia khoản chi hoặc một đầu của thanh toán. Phải xoá các dữ liệu liên quan trước.
@@ -95,6 +98,7 @@ Giúp một nhóm bạn ghi lại chi tiêu chung, biết mỗi người đang n
 - Người chưa đăng nhập không thể đọc/ghi dữ liệu nhóm. Tài khoản đã đăng nhập cần đúng `x-group-id` để thao tác nhóm, trừ system admin.
 - Tài khoản không phải chủ nhóm không thể xoá nhóm; system admin có thể xoá mọi nhóm.
 - Thành viên có thể thêm; thành viên đã được tham chiếu không thể xoá cho tới khi dữ liệu tham chiếu được xoá.
+- Người có link có thể tham gia nhóm mà không chọn nickname; chủ nhóm có thể liên kết tài khoản đó với nickname riêng trong nhóm.
 - Khoản chi và thanh toán có thể được sửa/xoá; từng thao tác tạo/sửa/xoá cùng actor và snapshot được ghi lại.
 - Xoá nhóm lưu lại sự kiện xoá và các sự kiện cascade trong audit log.
 - Mỗi khoản chi được chia đúng cho người tham gia và tổng số dư của nhóm bằng 0 trước/sau các thanh toán hợp lệ.

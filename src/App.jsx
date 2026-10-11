@@ -23,6 +23,7 @@ export default function App() {
   const [session, setSession] = useState(null)
   const [authReady, setAuthReady] = useState(false)
   const [authError, setAuthError] = useState('')
+  const [signingOut, setSigningOut] = useState(false)
 
   useEffect(() => {
     if (!supabase) return
@@ -47,6 +48,14 @@ export default function App() {
       data.subscription.unsubscribe()
     }
   }, [])
+
+  useEffect(() => {
+    if (!session) return
+    const returnHash = sessionStorage.getItem('authReturnHash')
+    if (!returnHash) return
+    sessionStorage.removeItem('authReturnHash')
+    if (window.location.hash !== returnHash) window.location.hash = returnHash
+  }, [session])
 
   if (!isConfigured) {
     return (
@@ -73,12 +82,20 @@ export default function App() {
   }
 
   async function signOut() {
-    const { error } = await supabase.auth.signOut()
-    if (error) setAuthError(error.message)
+    setSigningOut(true)
+    setAuthError('')
+    try {
+      const { error } = await supabase.auth.signOut({ scope: 'local' })
+      if (error) setAuthError(error.message)
+    } catch (error) {
+      setAuthError(error.message)
+    } finally {
+      setSigningOut(false)
+    }
   }
 
   return (
-    <Shell user={session.user} onSignOut={signOut}>
+    <Shell user={session.user} onSignOut={signOut} signingOut={signingOut} authError={authError}>
       {route.name === 'group'
         ? <Group key={route.id} id={route.id} user={session.user} />
         : <Home user={session.user} />}
@@ -92,12 +109,23 @@ function Login({ error, onError }) {
   async function signIn() {
     setBusy(true)
     onError('')
-    const { error: signInError } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: window.location.href },
-    })
-    if (signInError) onError(signInError.message)
-    setBusy(false)
+    sessionStorage.setItem('authReturnHash', window.location.hash || '#/')
+    try {
+      const redirectTo = `${window.location.origin}${window.location.pathname}`
+      const { error: signInError } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo },
+      })
+      if (signInError) {
+        sessionStorage.removeItem('authReturnHash')
+        onError(signInError.message)
+      }
+    } catch (signInError) {
+      sessionStorage.removeItem('authReturnHash')
+      onError(signInError.message)
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
@@ -110,7 +138,7 @@ function Login({ error, onError }) {
   )
 }
 
-function Shell({ children, user, onSignOut }) {
+function Shell({ children, user, onSignOut, signingOut, authError }) {
   return (
     <div className="app">
       <header className="top">
@@ -119,11 +147,14 @@ function Shell({ children, user, onSignOut }) {
           {user && (
             <div className="row gap">
               <span className="muted small-text">{user.user_metadata?.full_name || user.email}</span>
-              <button className="ghost small" onClick={onSignOut}>Đăng xuất</button>
+              <button className="ghost small" onClick={onSignOut} disabled={signingOut}>
+                {signingOut ? 'Đang đăng xuất…' : 'Đăng xuất'}
+              </button>
             </div>
           )}
         </div>
       </header>
+      {user && authError && <p className="error" role="alert">{authError}</p>}
       <main>{children}</main>
     </div>
   )
@@ -238,6 +269,7 @@ function Group({ id, user }) {
   const db = useMemo(() => clientFor(id), [id])
   const [group, setGroup] = useState(null)
   const [members, setMembers] = useState([])
+  const [groupParticipants, setGroupParticipants] = useState([])
   const [expenses, setExpenses] = useState([])
   const [payments, setPayments] = useState([])
   const [auditLog, setAuditLog] = useState([])
@@ -248,14 +280,15 @@ function Group({ id, user }) {
   const [copied, setCopied] = useState(false)
 
   const load = useCallback(async () => {
-    const [g, m, e, p, a] = await Promise.all([
+    const [g, m, r, e, p, a] = await Promise.all([
       db.from('groups').select('id,name,created_by').eq('id', id).maybeSingle(),
-      db.from('members').select('id,name').eq('group_id', id).order('created_at'),
+      db.from('members').select('id,name,account_id').eq('group_id', id).order('created_at'),
+      db.from('group_participants').select('id,user_id,display_name,email,joined_at').eq('group_id', id).order('joined_at'),
       db.from('expenses').select('*').eq('group_id', id).order('created_at', { ascending: false }),
       db.from('payments').select('*').eq('group_id', id).order('created_at', { ascending: false }),
       db.from('group_audit_log').select('*').eq('group_id', id).order('created_at', { ascending: false }).order('id', { ascending: false }).limit(auditLimit),
     ])
-    const err = g.error || m.error || e.error || p.error || a.error
+    const err = g.error || m.error || r.error || e.error || p.error || a.error
     if (err) {
       setError(err.message)
     } else if (!g.data) {
@@ -281,6 +314,7 @@ function Group({ id, user }) {
       if (groupData.created_by) setError('')
       setGroup(groupData)
       setMembers(m.data)
+      setGroupParticipants(r.data)
       setExpenses(e.data)
       setPayments(p.data)
       setAuditLog(a.data)
@@ -315,6 +349,7 @@ function Group({ id, user }) {
   const total = useMemo(() => expenses.reduce((s, e) => s + Number(e.amount), 0), [expenses])
   const isSystemAdmin = hasSystemAdminAccess(user)
   const canDeleteGroup = group?.created_by === user.id || isSystemAdmin
+  const canManageParticipants = group?.created_by === user.id || isSystemAdmin
 
   if (loading) return <p className="muted center">Đang tải…</p>
   if (error && !group)
@@ -333,7 +368,7 @@ function Group({ id, user }) {
           <p>Nếu nhóm đã bị xoá, nhật ký thay đổi vẫn được giữ lại bên dưới.</p>
           <a href="#/">Về trang chủ</a>
         </div>
-        <AuditHistory entries={auditLog} nameOf={nameOf} onLoadMore={() => setAuditLimit((limit) => limit + 100)} canLoadMore={auditLog.length === auditLimit} />
+        <AuditHistory entries={auditLog} nameOf={nameOf} groupParticipants={groupParticipants} onLoadMore={() => setAuditLimit((limit) => limit + 100)} canLoadMore={auditLog.length === auditLimit} />
       </>
     )
 
@@ -377,6 +412,25 @@ function Group({ id, user }) {
           </p>
         )}
       </div>
+
+      <GroupParticipation
+        user={user}
+        participants={groupParticipants}
+        members={members}
+        canManage={canManageParticipants}
+        onJoin={async () => {
+          const joined = await run(db.rpc('join_group', { p_group_id: id }))
+          return joined
+        }}
+        onAssign={async (userId, memberId) => {
+          const assigned = await run(db.rpc('assign_group_member_account', {
+            p_group_id: id,
+            p_member_id: memberId,
+            p_user_id: userId || null,
+          }))
+          return assigned
+        }}
+      />
 
       <Members
         members={members}
@@ -474,7 +528,7 @@ function Group({ id, user }) {
         </div>
       )}
 
-      <AuditHistory entries={auditLog} nameOf={nameOf} onLoadMore={() => setAuditLimit((limit) => limit + 100)} canLoadMore={auditLog.length === auditLimit} />
+      <AuditHistory entries={auditLog} nameOf={nameOf} groupParticipants={groupParticipants} onLoadMore={() => setAuditLimit((limit) => limit + 100)} canLoadMore={auditLog.length === auditLimit} />
 
       {canDeleteGroup && (
         <p className="center">
@@ -490,6 +544,7 @@ function Group({ id, user }) {
 const auditEntityNames = {
   groups: 'nhóm',
   members: 'thành viên',
+  group_participants: 'người tham gia',
   expenses: 'khoản chi',
   payments: 'thanh toán',
 }
@@ -500,11 +555,15 @@ const auditFieldNames = {
   amount: 'Số tiền',
   paid_by: 'Người trả',
   participants: 'Người tham gia',
+  account_id: 'Tài khoản được gán',
+  display_name: 'Tên tài khoản',
+  email: 'Email',
+  joined_at: 'Thời điểm tham gia',
   from_member: 'Người chuyển',
   to_member: 'Người nhận',
 }
 
-function auditValue(field, value, nameOf) {
+function auditValue(field, value, nameOf, groupParticipants = []) {
   if (value === null || value === undefined) return '—'
   if (field === 'amount') return formatVND(Number(value))
   if (field === 'participants') return value.map(nameOf).join(', ') || 'Không có'
@@ -512,10 +571,18 @@ function auditValue(field, value, nameOf) {
     const name = nameOf(value)
     return name === '(đã xoá)' ? `${value.slice(0, 8)}…` : name
   }
+  if (field === 'account_id') {
+    const participant = groupParticipants.find((entry) => entry.user_id === value)
+    return participant?.display_name || participant?.email || `Tài khoản ${value.slice(0, 8)}…`
+  }
+  if (field === 'user_id') {
+    const participant = groupParticipants.find((entry) => entry.user_id === value)
+    return participant?.display_name || participant?.email || `Tài khoản ${value.slice(0, 8)}…`
+  }
   return String(value)
 }
 
-function AuditHistory({ entries, nameOf, onLoadMore, canLoadMore }) {
+function AuditHistory({ entries, nameOf, onLoadMore, canLoadMore, groupParticipants = [] }) {
   if (entries.length === 0) return null
 
   return (
@@ -527,11 +594,11 @@ function AuditHistory({ entries, nameOf, onLoadMore, canLoadMore }) {
           const snapshot = entry.operation === 'DELETE' ? entry.old_data : entry.new_data
           const fields = entry.operation === 'UPDATE'
             ? Object.keys(entry.new_data || {}).filter(
-                (key) => !['id', 'group_id', 'created_at', 'created_by'].includes(key)
+                (key) => !['id', 'group_id', 'created_at', 'created_by', 'user_id'].includes(key)
                   && JSON.stringify(entry.old_data?.[key]) !== JSON.stringify(entry.new_data?.[key]),
               )
             : Object.keys(snapshot || {}).filter(
-                (key) => !['id', 'group_id', 'created_at', 'created_by'].includes(key),
+                (key) => !['id', 'group_id', 'created_at', 'created_by', 'user_id'].includes(key),
               )
           const verb = entry.operation === 'INSERT' ? 'Thêm' : entry.operation === 'UPDATE' ? 'Sửa' : 'Xoá'
 
@@ -547,9 +614,9 @@ function AuditHistory({ entries, nameOf, onLoadMore, canLoadMore }) {
                     <li key={field}>
                       <span className="muted">{auditFieldNames[field] || field}:</span>{' '}
                       {entry.operation === 'UPDATE' && (
-                        <><del>{auditValue(field, entry.old_data?.[field], nameOf)}</del> → </>
+                        <><del>{auditValue(field, entry.old_data?.[field], nameOf, groupParticipants)}</del> → </>
                       )}
-                      {auditValue(field, snapshot?.[field], nameOf)}
+                      {auditValue(field, snapshot?.[field], nameOf, groupParticipants)}
                     </li>
                   ))}
                 </ul>
@@ -559,6 +626,84 @@ function AuditHistory({ entries, nameOf, onLoadMore, canLoadMore }) {
         })}
       </ul>
       {canLoadMore && <button className="secondary small" onClick={onLoadMore}>Tải thay đổi cũ hơn</button>}
+    </section>
+  )
+}
+
+function GroupParticipation({ user, participants, members, canManage, onJoin, onAssign }) {
+  const [busy, setBusy] = useState(false)
+  const [savingUserId, setSavingUserId] = useState(null)
+  const joined = participants.some((participant) => participant.user_id === user.id)
+
+  async function join() {
+    setBusy(true)
+    await onJoin()
+    setBusy(false)
+  }
+
+  async function assign(memberId, userId) {
+    setSavingUserId(userId)
+    await onAssign(userId, memberId)
+    setSavingUserId(null)
+  }
+
+  if (!joined) {
+    return (
+      <section className="card">
+        <h2>Tham gia nhóm</h2>
+        <p className="muted">Tham gia để chủ nhóm thấy tài khoản của bạn và gán bạn vào nickname đã có. Bạn không cần chọn nickname.</p>
+        <button onClick={join} disabled={busy}>{busy ? 'Đang tham gia…' : 'Tham gia nhóm'}</button>
+      </section>
+    )
+  }
+
+  if (!canManage) {
+    const linkedMember = members.find((member) => member.account_id === user.id)
+    return (
+      <p className="muted small-text">
+        Bạn đã tham gia nhóm{linkedMember ? ` với nickname “${linkedMember.name}”` : ''}. Chủ nhóm có thể gán hoặc đổi nickname.
+      </p>
+    )
+  }
+
+  return (
+    <section className="card">
+      <h2>Người tham gia qua link</h2>
+      <p className="muted small-text">Gán tài khoản vào nickname đã tạo sẵn. Có thể đổi hoặc bỏ gán sau.</p>
+      {participants.length === 0 ? <p className="muted">Chưa có ai tham gia.</p> : (
+        <ul className="list">
+          {participants.map((participant) => {
+            const linkedMember = members.find((member) => member.account_id === participant.user_id)
+            const availableMembers = members.filter(
+              (member) => !member.account_id || member.account_id === participant.user_id,
+            )
+            const label = participant.display_name || participant.email || 'Tài khoản Google'
+
+            return (
+              <li key={participant.id}>
+                <span>
+                  <b>{label}</b>
+                  {participant.email && participant.display_name && (
+                    <><br /><span className="muted small-text">{participant.email}</span></>
+                  )}
+                </span>
+                <select
+                  className="participant-member-select"
+                  aria-label={`Gán nickname cho ${label}`}
+                  value={linkedMember?.id || ''}
+                  disabled={savingUserId !== null}
+                  onChange={(event) => assign(participant.user_id, event.target.value || null)}
+                >
+                  <option value="">Chưa gán nickname</option>
+                  {availableMembers.map((member) => (
+                    <option key={member.id} value={member.id}>{member.name}</option>
+                  ))}
+                </select>
+              </li>
+            )
+          })}
+        </ul>
+      )}
     </section>
   )
 }

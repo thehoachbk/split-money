@@ -53,6 +53,7 @@ Workflow chạy test và build trước khi deploy. Nếu thiếu secrets Supaba
 - Người dùng phải đăng nhập Google để dùng ứng dụng.
 - Người tạo nhóm được lưu bằng Supabase Auth user ID và là người duy nhất (ngoài system admin) có quyền xoá nhóm.
 - Những tài khoản Google đã đăng nhập và có link nhóm (`#/g/<uuid>`) đều có thể xem/sửa dữ liệu, thành viên, khoản chi và thanh toán của nhóm. Link vẫn là bearer secret; không có cơ chế mời hoặc phân quyền thành viên.
+- Người mở link có thể bấm **Tham gia nhóm** để chủ nhóm thấy tài khoản Google của họ; họ không cần chọn nickname. Chủ nhóm có thể gán tài khoản vào nickname có sẵn, đổi hoặc bỏ gán. Nickname chỉ là tên hiển thị trong nhóm đó; một tài khoản có thể có nickname khác ở nhóm khác.
 - `thehoach92@gmail.com` là system admin: có thể xem, sửa và xoá mọi nhóm, kể cả không có link; trang chủ liệt kê nhóm theo từng trang 100 nhóm.
 - Mọi thêm/sửa/xoá nhóm, thành viên, khoản chi và thanh toán được ghi vào `group_audit_log` bằng trigger Postgres. Nhật ký chỉ đọc qua ứng dụng, không cho sửa/xoá, và bản ghi sự kiện xoá nhóm vẫn được giữ lại.
 - Các nhóm được tạo trước khi bật đăng nhập không có chủ sở hữu xác định. Người Google đầu tiên mở được link sẽ nhận quyền sở hữu nhóm đó.
@@ -65,6 +66,7 @@ Workflow chạy test và build trước khi deploy. Nếu thiếu secrets Supaba
 - Tiền tính bằng số nguyên (VND). Khi chia không hết, phần dư vài đồng được rải cho những người đầu danh sách.
 - Gói Free của Supabase có thể tạm dừng project nếu lâu không có hoạt động; vào dashboard bấm khôi phục là chạy lại.
 - Xoá thành viên chỉ làm được khi người đó chưa có trong khoản chi hay thanh toán nào.
+- Khi cập nhật database hiện tại để có chức năng tham gia/gán nickname, chạy migration `supabase/migrations/20261011000002_group_participants.sql`.
 - `supabase/schema.sql` là schema khởi tạo; thay đổi cho project đã có dữ liệu phải đi qua migration trong `supabase/migrations/`.
 
 ## Test

@@ -49,14 +49,6 @@ export default function App() {
     }
   }, [])
 
-  useEffect(() => {
-    if (!session) return
-    const returnHash = sessionStorage.getItem('authReturnHash')
-    if (!returnHash) return
-    sessionStorage.removeItem('authReturnHash')
-    if (window.location.hash !== returnHash) window.location.hash = returnHash
-  }, [session])
-
   if (!isConfigured) {
     return (
       <Shell>
@@ -109,7 +101,6 @@ function Login({ error, onError }) {
   async function signIn() {
     setBusy(true)
     onError('')
-    sessionStorage.setItem('authReturnHash', window.location.hash || '#/')
     try {
       const redirectTo = `${window.location.origin}${window.location.pathname}`
       const { error: signInError } = await supabase.auth.signInWithOAuth({
@@ -117,11 +108,9 @@ function Login({ error, onError }) {
         options: { redirectTo },
       })
       if (signInError) {
-        sessionStorage.removeItem('authReturnHash')
         onError(signInError.message)
       }
     } catch (signInError) {
-      sessionStorage.removeItem('authReturnHash')
       onError(signInError.message)
     } finally {
       setBusy(false)
@@ -641,9 +630,9 @@ function GroupParticipation({ user, participants, members, canManage, onJoin, on
     setBusy(false)
   }
 
-  async function assign(memberId, userId) {
-    setSavingUserId(userId)
-    await onAssign(userId, memberId)
+  async function assign(participantUserId, memberId) {
+    setSavingUserId(participantUserId)
+    await onAssign(participantUserId, memberId)
     setSavingUserId(null)
   }
 

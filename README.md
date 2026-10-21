@@ -13,7 +13,7 @@ App chia tiền cho nhóm bạn: React (Vite) + Supabase, deploy miễn phí tr�
 
 1. Vào [supabase.com](https://supabase.com), tạo project mới (gói Free).
 2. Với project mới, chạy `supabase/schema.sql` trong **SQL Editor → New query**.
-3. Chạy các file trong `supabase/migrations/` theo thứ tự tên, bắt đầu từ `20261011000000_google_auth_audit.sql`. Với database hiện có, chạy migration mà project chưa áp dụng; không chạy lại schema khởi tạo.
+3. Chạy các file trong `supabase/migrations/` theo thứ tự tên, bắt đầu từ `20261011000000_google_auth_audit.sql`. Với database hiện có, chạy migration mà project chưa áp dụng; không chạy lại schema khởi tạo. Migration `20261011000011_explicit_data_api_grants.sql` cấp quyền Data API tường minh cho `service_role` trên các bảng ứng dụng; quyền truy cập của người dùng đăng nhập vẫn do GRANT hiện có và RLS kiểm soát, còn audit log chỉ được đọc.
 4. Trong **Authentication → Providers → Google**, bật Google và cấu hình OAuth Client ID/Secret từ Google Cloud. Đặt callback URL phía Google theo giá trị Supabase hiển thị (thường là `https://<project-ref>.supabase.co/auth/v1/callback`).
 5. Trong **Authentication → URL Configuration**, đặt Site URL và thêm redirect URLs cho môi trường local (`http://localhost:5173/**`) cùng địa chỉ GitHub Pages (`https://<user>.github.io/<repo>/**`).
 6. Vào **Project Settings → API**, copy **Project URL** và **anon public key**.
@@ -79,6 +79,7 @@ Workflow chạy test và build trước khi deploy. Nếu thiếu secrets Supaba
 - Chạy migration `supabase/migrations/20261011000009_require_group_participation_to_edit.sql` để chỉ cho phép người đã tham gia nhóm chỉnh sửa dữ liệu.
 - Chạy migration `supabase/migrations/20261011000010_claimed_owners_participate.sql` để người nhận quyền sở hữu nhóm cũ tự động được đăng ký tham gia và có thành viên chính.
 - `supabase/schema.sql` là schema khởi tạo; thay đổi cho project đã có dữ liệu phải đi qua migration trong `supabase/migrations/`.
+- Các bảng public cần GRANT tường minh để truy cập qua Supabase Data API. Không cấp quyền `anon` vì ứng dụng yêu cầu đăng nhập; không cấp quyền sửa/xoá audit log.
 
 ## Test
 

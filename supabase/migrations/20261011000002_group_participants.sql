@@ -174,6 +174,7 @@ create trigger audit_group_participants
 
 revoke all on public.group_participants from public, anon, authenticated;
 grant select on public.group_participants to authenticated;
+grant select, insert, update, delete on public.group_participants to service_role;
 revoke update on public.members from authenticated;
 
 revoke all on function public.register_group_creator() from public, anon, authenticated;

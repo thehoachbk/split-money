@@ -220,6 +220,9 @@ revoke all on public.groups, public.group_audit_log from authenticated;
 grant select, insert (id, name, created_by), update (name) on public.groups to authenticated;
 grant select, insert, update, delete on public.members, public.expenses, public.payments to authenticated;
 grant select on public.group_audit_log to authenticated;
+grant select, insert, update, delete on public.groups, public.members, public.expenses, public.payments
+  to service_role;
+grant select on public.group_audit_log to service_role;
 grant usage, select on sequence public.group_audit_log_id_seq to authenticated;
 
 revoke all on function public.current_group_id() from public, anon;

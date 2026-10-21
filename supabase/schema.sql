@@ -172,7 +172,12 @@ create trigger set_group_chat_sender
 
 grant select, insert, update, delete on public.groups, public.members, public.expenses, public.payments
   to anon, authenticated;
+grant select, insert, update, delete on public.groups, public.members, public.expenses, public.payments
+  to service_role;
 revoke all on public.group_chat_messages from public, anon, authenticated;
 grant select, insert (group_id, user_id, message) on public.group_chat_messages to authenticated;
+grant select, insert, update, delete on public.group_participants, public.group_chat_messages
+  to service_role;
 grant usage, select on sequence public.group_chat_messages_id_seq to authenticated;
+grant usage, select on sequence public.group_chat_messages_id_seq to service_role;
 revoke all on function public.set_group_chat_sender() from public, anon, authenticated;

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { clientFor, isConfigured, supabase } from './supabase.js'
 import { computeBalances } from './settle.js'
-import { forgetRecent, formatTime, formatVND, getRecent, parseAmount, saveRecent } from './util.js'
+import { formatTime, formatVND, parseAmount } from './util.js'
 
 function hasSystemAdminAccess(user) {
   return user.email?.toLowerCase() === 'thehoach92@gmail.com' && user.app_metadata?.provider === 'google'
@@ -154,7 +154,41 @@ function Home({ user }) {
   const [description, setDescription] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const [recent, setRecent] = useState(getRecent())
+  const [groups, setGroups] = useState([])
+  const [groupsLoading, setGroupsLoading] = useState(true)
+  const [groupsError, setGroupsError] = useState('')
+
+  const loadGroups = useCallback(async () => {
+    setGroupsLoading(true)
+    setGroupsError('')
+    const { data: memberships, error: membershipError } = await clientFor(null)
+      .from('group_participants')
+      .select('group_id')
+      .eq('user_id', user.id)
+    if (membershipError) {
+      setGroupsError(membershipError.message)
+      setGroupsLoading(false)
+      return
+    }
+    const groupIds = memberships.map((membership) => membership.group_id)
+    if (groupIds.length === 0) {
+      setGroups([])
+      setGroupsLoading(false)
+      return
+    }
+    const { data, error: loadError } = await clientFor(null)
+      .from('groups')
+      .select('id,name,created_at')
+      .in('id', groupIds)
+      .order('created_at', { ascending: false })
+    if (loadError) setGroupsError(loadError.message)
+    else setGroups(data)
+    setGroupsLoading(false)
+  }, [user.id])
+
+  useEffect(() => {
+    loadGroups()
+  }, [loadGroups])
 
   async function create(e) {
     e.preventDefault()
@@ -174,7 +208,6 @@ function Home({ user }) {
       setError(err.message)
       return
     }
-    saveRecent({ id, name: n })
     window.location.hash = `#/g/${id}`
   }
 
@@ -206,67 +239,29 @@ function Home({ user }) {
         {error && <p className="error">{error}</p>}
       </form>
 
-      {recent.length > 0 && (
-        <div className="card">
-          <h2>Nhóm gần đây</h2>
+      <div className="card">
+        <h2>Nhóm bạn đã tham gia</h2>
+        {groupsError ? (
+          <>
+            <p className="error">{groupsError}</p>
+            <button className="secondary small" onClick={loadGroups}>Thử lại</button>
+          </>
+        ) : groupsLoading ? (
+          <p className="muted">Đang tải danh sách nhóm…</p>
+        ) : groups.length === 0 ? (
+          <p className="muted">Bạn chưa tham gia nhóm nào. Mở link nhóm được chia sẻ để xem và tham gia.</p>
+        ) : (
           <ul className="list">
-            {recent.map((g) => (
-              <li key={g.id}>
-                <a href={`#/g/${g.id}`}>{g.name}</a>
-                <button
-                  className="ghost small"
-                  onClick={() => {
-                    forgetRecent(g.id)
-                    setRecent(getRecent())
-                  }}
-                  title="Xoá khỏi danh sách này (không xoá nhóm)"
-                >
-                  ✕
-                </button>
+            {groups.map((group) => (
+              <li key={group.id}>
+                <a href={`#/g/${group.id}`}>{group.name}</a>
+                <span className="muted small-text">{formatTime(group.created_at)}</span>
               </li>
             ))}
           </ul>
-        </div>
-      )}
-      {hasSystemAdminAccess(user) && <AdminGroups />}
+        )}
+      </div>
     </>
-  )
-}
-
-function AdminGroups() {
-  const [groups, setGroups] = useState([])
-  const [error, setError] = useState('')
-  const [limit, setLimit] = useState(100)
-
-  useEffect(() => {
-    async function load() {
-      const { data, error: loadError } = await clientFor(null)
-        .from('groups')
-        .select('id,name,created_by,created_at')
-        .order('created_at', { ascending: false })
-        .limit(limit)
-      if (loadError) setError(loadError.message)
-      else setGroups(data)
-    }
-    load()
-  }, [limit])
-
-  return (
-    <section className="card">
-      <h2>Quản trị hệ thống · Tất cả nhóm</h2>
-      {error && <p className="error">{error}</p>}
-      {groups.length === 0 && !error ? <p className="muted">Chưa có nhóm nào.</p> : (
-        <ul className="list">
-          {groups.map((group) => (
-            <li key={group.id}>
-              <a href={`#/g/${group.id}`}>{group.name}</a>
-              <span className="muted small-text">{formatTime(group.created_at)}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-      {groups.length === limit && <button className="secondary small" onClick={() => setLimit((value) => value + 100)}>Tải thêm nhóm</button>}
-    </section>
   )
 }
 
@@ -330,7 +325,6 @@ function Group({ id, user }) {
       setExpenses(e.data)
       setPayments(p.data)
       setAuditLog(a.data)
-      saveRecent(groupData)
     }
     setLoading(false)
   }, [auditLimit, db, id])
@@ -400,7 +394,6 @@ function Group({ id, user }) {
       return
     }
 
-    forgetRecent(id)
     window.location.hash = '#/'
   }
 

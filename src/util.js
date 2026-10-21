@@ -17,36 +17,6 @@ export function parseAmount(input) {
   return Number(m[1].replace(/[.,]/g, ''))
 }
 
-const KEY = 'chia-tien:recent'
-
-export function getRecent() {
-  try {
-    const list = JSON.parse(localStorage.getItem(KEY) || '[]')
-    return Array.isArray(list) ? list : []
-  } catch {
-    return []
-  }
-}
-
-export function saveRecent(group) {
-  try {
-    const list = getRecent().filter((g) => g.id !== group.id)
-    list.unshift({ id: group.id, name: group.name })
-    localStorage.setItem(KEY, JSON.stringify(list.slice(0, 20)))
-  } catch {
-    /* localStorage có thể bị chặn, bỏ qua */
-  }
-}
-
-export function forgetRecent(id) {
-  try {
-    const list = getRecent().filter((g) => g.id !== id)
-    localStorage.setItem(KEY, JSON.stringify(list))
-  } catch {
-    /* ignore */
-  }
-}
-
 export function formatTime(iso) {
   const d = new Date(iso)
   return d.toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })

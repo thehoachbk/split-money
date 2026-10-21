@@ -157,6 +157,7 @@ function Home({ user }) {
   const [groups, setGroups] = useState([])
   const [groupsLoading, setGroupsLoading] = useState(true)
   const [groupsError, setGroupsError] = useState('')
+  const isSystemAdmin = hasSystemAdminAccess(user)
 
   const loadGroups = useCallback(async () => {
     setGroupsLoading(true)
@@ -261,7 +262,45 @@ function Home({ user }) {
           </ul>
         )}
       </div>
+      {isSystemAdmin && <AdminGroups />}
     </>
+  )
+}
+
+function AdminGroups() {
+  const [groups, setGroups] = useState([])
+  const [error, setError] = useState('')
+  const [limit, setLimit] = useState(100)
+
+  useEffect(() => {
+    async function load() {
+      const { data, error: loadError } = await clientFor(null)
+        .from('groups')
+        .select('id,name,created_at')
+        .order('created_at', { ascending: false })
+        .limit(limit)
+      if (loadError) setError(loadError.message)
+      else setGroups(data)
+    }
+    load()
+  }, [limit])
+
+  return (
+    <section className="card">
+      <h2>Quản trị hệ thống · Tất cả nhóm</h2>
+      {error && <p className="error">{error}</p>}
+      {groups.length === 0 && !error ? <p className="muted">Chưa có nhóm nào.</p> : (
+        <ul className="list">
+          {groups.map((group) => (
+            <li key={group.id}>
+              <a href={`#/g/${group.id}`}>{group.name}</a>
+              <span className="muted small-text">{formatTime(group.created_at)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {groups.length === limit && <button className="secondary small" onClick={() => setLimit((value) => value + 100)}>Tải thêm nhóm</button>}
+    </section>
   )
 }
 
@@ -283,51 +322,84 @@ function Group({ id, user }) {
   const [savingDescription, setSavingDescription] = useState(false)
 
   const load = useCallback(async () => {
-    const [g, m, r, e, p, a] = await Promise.all([
+    const [g, m, r] = await Promise.all([
       db.from('groups')
-        .select('id,name,description,transfer_bank_name,transfer_account_number,transfer_account_holder,created_by')
+        .select('id,name,description,created_by')
         .eq('id', id)
         .maybeSingle(),
       db.from('members').select('id,name,account_id').eq('group_id', id).order('created_at'),
       db.from('group_participants').select('id,user_id,display_name,email,joined_at').eq('group_id', id).order('joined_at'),
-      db.from('expenses').select('*').eq('group_id', id).order('created_at', { ascending: false }),
-      db.from('payments').select('*').eq('group_id', id).order('created_at', { ascending: false }),
-      db.from('group_audit_log').select('*').eq('group_id', id).order('created_at', { ascending: false }).order('id', { ascending: false }).limit(auditLimit),
     ])
-    const err = g.error || m.error || r.error || e.error || p.error || a.error
+    const err = g.error || m.error || r.error
     if (err) {
       setError(err.message)
     } else if (!g.data) {
       setNotFound(true)
-      setAuditLog(a.data)
     } else {
       setNotFound(false)
       let groupData = g.data
+      let participantData = r.data
       if (!groupData.created_by) {
         const { error: claimError } = await db.rpc('claim_group_ownership', { p_group_id: id })
         if (claimError) {
           setError(claimError.message)
         } else {
-          const { data: updatedGroup, error: reloadError } = await db
-            .from('groups')
-            .select('id,name,description,transfer_bank_name,transfer_account_number,transfer_account_holder,created_by')
-            .eq('id', id)
-            .maybeSingle()
+          const [updatedGroup, updatedParticipants] = await Promise.all([
+            db.from('groups')
+              .select('id,name,description,created_by')
+              .eq('id', id)
+              .maybeSingle(),
+            db.from('group_participants').select('id,user_id,display_name,email,joined_at').eq('group_id', id).order('joined_at'),
+          ])
+          const reloadError = updatedGroup.error || updatedParticipants.error
           if (reloadError) setError(reloadError.message)
-          else if (updatedGroup) groupData = updatedGroup
+          else {
+            if (updatedGroup.data) groupData = updatedGroup.data
+            participantData = updatedParticipants.data
+          }
         }
       }
       if (groupData.created_by) setError('')
       setGroup(groupData)
       setDescriptionDraft(groupData.description || '')
       setMembers(m.data)
-      setGroupParticipants(r.data)
-      setExpenses(e.data)
-      setPayments(p.data)
-      setAuditLog(a.data)
+      setGroupParticipants(participantData)
+
+      const canViewGroupData = hasSystemAdminAccess(user)
+        || participantData.some((participant) => participant.user_id === user.id)
+      if (canViewGroupData) {
+        const [details, e, p, a] = await Promise.all([
+          db.from('groups')
+            .select('transfer_bank_name,transfer_account_number,transfer_account_holder')
+            .eq('id', id)
+            .single(),
+          db.from('expenses').select('*').eq('group_id', id).order('created_at', { ascending: false }),
+          db.from('payments').select('*').eq('group_id', id).order('created_at', { ascending: false }),
+          db.from('group_audit_log').select('*').eq('group_id', id).order('created_at', { ascending: false }).order('id', { ascending: false }).limit(auditLimit),
+        ])
+        const dataError = details.error || e.error || p.error || a.error
+        if (dataError) setError(dataError.message)
+        else {
+          setGroup((current) => ({ ...current, ...details.data }))
+          setExpenses(e.data)
+          setPayments(p.data)
+          setAuditLog(a.data)
+        }
+      } else {
+        setGroup((current) => ({
+          id: current.id,
+          name: current.name,
+          description: current.description,
+          created_by: current.created_by,
+        }))
+        setExpenses([])
+        setPayments([])
+        setAuditLog([])
+        setActiveTab('members')
+      }
     }
     setLoading(false)
-  }, [auditLimit, db, id])
+  }, [auditLimit, db, id, user])
 
   useEffect(() => {
     load()
@@ -357,6 +429,7 @@ function Group({ id, user }) {
   const canManageParticipants = group?.created_by === user.id || isSystemAdmin
   const isGroupParticipant = groupParticipants.some((participant) => participant.user_id === user.id)
   const canEditGroup = isGroupParticipant || isSystemAdmin
+  const canViewGroupData = canEditGroup
 
   if (loading) return <p className="muted center">Đang tải…</p>
   if (error && !group)
@@ -403,19 +476,19 @@ function Group({ id, user }) {
         <div className="row spread">
           <div>
             <h1>{group.name}</h1>
-            <p className="muted">
+            {canViewGroupData && <p className="muted">
               {members.length} người · {expenses.length} khoản chi · tổng {formatVND(total)}
-            </p>
+            </p>}
           </div>
           {group.description && <p className="group-description">{group.description}</p>}
           <button className="secondary" onClick={copyLink}>
             {copied ? 'Đã copy ✓' : 'Copy link nhóm'}
           </button>
         </div>
-        <p className="muted small-text">Người đăng nhập có link nhóm có thể xem dữ liệu. Cần tham gia nhóm để chỉnh sửa; chỉ người tạo nhóm và system admin mới được xoá nhóm.</p>
+        <p className="muted small-text">Người có link chưa tham gia chỉ xem được tab Thành viên. Chỉ thành viên và system admin xem được dữ liệu nhóm; chỉ người tạo nhóm và system admin mới được xoá nhóm.</p>
         {!canEditGroup && (
           <p className="muted" role="status">
-            Bạn đang xem nhóm ở chế độ chỉ đọc. Vào tab Thành viên và tham gia nhóm để có thể chỉnh sửa.
+            Bạn đang xem nhóm ở chế độ giới hạn. Hãy tham gia nhóm trong tab Thành viên để mở các tab còn lại.
           </p>
         )}
         {error && (
@@ -431,7 +504,7 @@ function Group({ id, user }) {
           ['members', 'Thành viên'],
           ['history', 'Lịch sử'],
           ['chat', 'Chat'],
-        ].map(([tab, label]) => (
+        ].filter(([tab]) => canViewGroupData || tab === 'members').map(([tab, label]) => (
           <button
             key={tab}
             id={`group-tab-${tab}`}

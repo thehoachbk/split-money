@@ -25,12 +25,12 @@
 
 ### Trang nhóm
 
-1. Tóm tắt tên, mô tả, số thành viên, số khoản chi, tổng chi; nút sao chép link và trạng thái quyền truy cập.
+1. Tóm tắt tên, mô tả, số thành viên, số khoản chi, tổng chi; nút sao chép link và trạng thái quyền truy cập. Người chưa tham gia chỉ thấy tên/mô tả, không thấy số liệu nhóm.
 2. Tab Tổng quan gồm khoản chi, tài khoản nhận tiền chung, số dư và các thanh toán đã ghi nhận.
 3. Tab Thành viên gồm danh sách thành viên, tham gia nhóm, nickname cá nhân và các tác vụ chỉ dành cho người có quyền.
 4. Tab Lịch sử hiển thị actor, thời gian, loại hành động và snapshot trước/sau; tải theo từng trang 100 hoạt động.
 5. Tab Chat dành cho người đã tham gia nhóm.
-6. Người có link nhưng chưa tham gia chỉ xem; thông báo hướng dẫn họ vào tab Thành viên để tham gia trước khi sửa.
+6. Người có link nhưng chưa tham gia chỉ thấy tab Thành viên; các tab dữ liệu chỉ hiện sau khi tham gia. Thông báo hướng dẫn họ tham gia nhóm.
 7. Nút xoá nhóm chỉ hiển thị cho người tạo hoặc system admin.
 
 ### Đăng nhập và session
@@ -53,12 +53,12 @@
 - React 18 render từ `src/main.jsx`; Vite xử lý dev server và production build.
 - `src/App.jsx` chứa shell, OAuth state, các màn hình/luồng trang chủ, nhóm, thành viên, khoản chi, lịch sử.
 - Điều hướng dùng URL fragment: `#/` cho trang chủ và `#/g/<uuid>` cho nhóm; không cần fallback route phía hosting.
-- `src/util.js` định dạng tiền/giờ, phân tích đầu vào tiền và quản lý nhóm gần đây trong `localStorage`.
+- `src/util.js` định dạng tiền/giờ và phân tích đầu vào tiền.
 - `src/settle.js` là nguồn chuẩn cho phép tính số dư và tạo danh sách thanh toán đề xuất; không chuyển logic tiền sang UI hoặc làm tròn qua số thực ngoài phần parse/DB cần thiết.
 - Một Supabase client giữ session Auth; fetch wrapper thêm `x-group-id` theo nhóm đang hoạt động để đáp ứng chính sách RLS.
-- State nhóm và audit log được tải từ Supabase; sau thao tác ghi thành công, tải lại dữ liệu. Tab đang hiển thị polling mỗi 15 giây.
+- State nhóm và audit log được tải từ Supabase; sau thao tác ghi thành công, tải lại dữ liệu. Người chưa tham gia chỉ tải dữ liệu cần cho tab Thành viên; RLS chặn đọc khoản chi, thanh toán và audit log. Tab đang hiển thị polling mỗi 15 giây.
 - Chủ nhóm/system admin có thể gỡ tài khoản khỏi danh sách tham gia bằng RPC bảo vệ quyền; thành viên còn được khoản chi/thanh toán tham chiếu được giữ để bảo toàn sổ sách, nhưng mất quyền chat.
-- Người có link nhưng chưa tham gia chỉ xem; biểu ngữ hướng dẫn họ vào tab Thành viên để tham gia trước khi hiện các thao tác ghi.
+- Người có link nhưng chưa tham gia chỉ xem tab Thành viên; biểu ngữ hướng dẫn họ tham gia để mở các tab dữ liệu.
 
 ## Supabase và dữ liệu
 

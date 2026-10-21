@@ -50,9 +50,9 @@ Workflow chạy test và build trước khi deploy. Nếu thiếu secrets Supaba
 ## Đăng nhập và quyền truy cập
 
 - Người dùng phải đăng nhập Google để dùng ứng dụng.
-- Trang chủ chỉ liệt kê các nhóm mà tài khoản đã tham gia; người chưa tham gia chỉ xem được nhóm khi mở link được chia sẻ và có thể bấm tham gia từ trang nhóm.
+- Trang chủ liệt kê các nhóm mà tài khoản đã tham gia; system admin `thehoach92@gmail.com` có thêm danh sách tất cả nhóm. Người chưa tham gia chỉ xem được tab Thành viên khi mở link được chia sẻ và có thể tham gia nhóm tại đó.
 - Người tạo nhóm được lưu bằng Supabase Auth user ID và là người duy nhất (ngoài system admin) có quyền xoá nhóm.
-- Tài khoản Google đã đăng nhập và có link nhóm (`#/g/<uuid>`) có thể xem nhóm trước khi tham gia; chỉ người đã tham gia mới được sửa dữ liệu, thành viên, khoản chi và thanh toán. Link vẫn cho phép xem trước, không thay thế bước tham gia.
+- Tài khoản Google đã đăng nhập và có link nhóm (`#/g/<uuid>`) chỉ mở được tab Thành viên trước khi tham gia; chỉ người đã tham gia mới được xem các tab Tổng quan, Lịch sử, Chat và dữ liệu chi tiêu/lịch sử qua Data API.
 - Người mở link có thể bấm **Tham gia nhóm** để tạo thành viên chính bằng tên Google; mỗi người có thể tự đổi nickname riêng trong nhóm. Chủ nhóm có thể gộp nickname tạm vào tài khoản đã tham gia. Gộp sẽ chuyển khoản chi/thanh toán sang thành viên tài khoản, lấy nickname tạm làm tên hiển thị rồi xoá thành viên tạm trong cùng transaction.
 - Chủ nhóm hoặc system admin có thể xoá người tham gia khỏi danh sách nhóm. Quyền chat bị thu hồi; dữ liệu chi tiêu cũ được giữ nguyên (thành viên tài chính chỉ bị xoá nếu chưa được dùng).
 - Mô tả nhóm (tối đa 500 ký tự) hiển thị cho người mở link; chỉ chủ nhóm hoặc system admin được cập nhật.
@@ -80,6 +80,7 @@ Workflow chạy test và build trước khi deploy. Nếu thiếu secrets Supaba
 - Chạy migration `supabase/migrations/20261011000009_require_group_participation_to_edit.sql` để chỉ cho phép người đã tham gia nhóm chỉnh sửa dữ liệu.
 - Chạy migration `supabase/migrations/20261011000010_claimed_owners_participate.sql` để người nhận quyền sở hữu nhóm cũ tự động được đăng ký tham gia và có thành viên chính.
 - Chạy migration `supabase/migrations/20261011000012_list_joined_groups.sql` để trang chủ chỉ liệt kê nhóm người dùng đã tham gia; link nhóm vẫn cho phép xem trước và tham gia.
+- Chạy migration `supabase/migrations/20261011000013_restrict_group_data_reads.sql` để giới hạn đọc khoản chi, thanh toán và audit log cho thành viên nhóm hoặc system admin.
 - `supabase/schema.sql` là schema khởi tạo; thay đổi cho project đã có dữ liệu phải đi qua migration trong `supabase/migrations/`.
 - Các bảng public cần GRANT tường minh để truy cập qua Supabase Data API. Không cấp quyền `anon` vì ứng dụng yêu cầu đăng nhập; không cấp quyền sửa/xoá audit log.
 

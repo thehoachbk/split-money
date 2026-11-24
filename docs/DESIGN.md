@@ -27,6 +27,7 @@
 
 1. Tóm tắt tên, mô tả, số thành viên, số khoản chi, tổng chi; nút sao chép link và trạng thái quyền truy cập. Người chưa tham gia chỉ thấy tên/mô tả, không thấy số liệu nhóm.
 2. Tab Tổng quan gồm khoản chi, tài khoản nhận tiền chung, số dư và các thanh toán đã ghi nhận.
+   Danh sách khoản chi có nút xuất `.xlsx` với một cột cho mỗi thành viên; thư viện bảng tính chỉ được tải khi người dùng xuất file.
 3. Tab Thành viên gồm danh sách thành viên, tham gia nhóm, nickname cá nhân và các tác vụ chỉ dành cho người có quyền.
 4. Tab Lịch sử hiển thị actor, thời gian, loại hành động và snapshot trước/sau; tải theo từng trang 100 hoạt động.
 5. Tab Chat dành cho người đã tham gia nhóm.

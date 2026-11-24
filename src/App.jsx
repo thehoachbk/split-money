@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { clientFor, isConfigured, supabase } from './supabase.js'
 import { computeBalances } from './settle.js'
+import { downloadExpenseWorkbook } from './exportExpenses.js'
 import { formatTime, formatVND, parseAmount } from './util.js'
 
 function hasSystemAdminAccess(user) {
@@ -320,6 +321,7 @@ function Group({ id, user }) {
   const [copied, setCopied] = useState(false)
   const [descriptionDraft, setDescriptionDraft] = useState('')
   const [savingDescription, setSavingDescription] = useState(false)
+  const [exportingExpenses, setExportingExpenses] = useState(false)
 
   const load = useCallback(async () => {
     const [g, m, r] = await Promise.all([
@@ -468,6 +470,17 @@ function Group({ id, user }) {
     }
 
     window.location.hash = '#/'
+  }
+
+  async function exportExpenses() {
+    setExportingExpenses(true)
+    try {
+      await downloadExpenseWorkbook(group.name, members, expenses)
+    } catch (exportError) {
+      setError(`Không thể xuất file Excel: ${exportError.message}`)
+    } finally {
+      setExportingExpenses(false)
+    }
   }
 
   return (
@@ -648,7 +661,12 @@ function Group({ id, user }) {
       </div>
 
       <div className="card">
-        <h2>Các khoản chi</h2>
+        <div className="row spread">
+          <h2>Các khoản chi</h2>
+          <button className="secondary small" onClick={exportExpenses} disabled={expenses.length === 0 || exportingExpenses}>
+            {exportingExpenses ? 'Đang xuất…' : 'Xuất Excel'}
+          </button>
+        </div>
         {expenses.length === 0 ? (
           <p className="muted">Chưa có khoản chi nào.</p>
         ) : (

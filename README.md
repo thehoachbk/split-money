@@ -5,6 +5,7 @@ App chia tiền cho nhóm bạn: React (Vite) + Supabase, deploy miễn phí tr�
 - [Đặc tả sản phẩm](./docs/SPEC.md) · [Thiết kế giao diện và kiến trúc](./docs/DESIGN.md)
 - Đăng nhập Google, tạo nhóm rồi gửi link cho những người cần tham gia.
 - Thêm thành viên, thêm khoản chi (ai trả, chia cho những ai).
+- Xuất bảng khoản chi ra Excel, kèm số tiền mỗi thành viên chịu cho từng khoản.
 - Tự tính số dư từng người; chủ nhóm cài tài khoản nhận tiền chung để mọi người chuyển khoản âm vào, người có số dư dương nhận tiền từ đó.
 - Sửa/xoá khoản chi và thanh toán; mọi thay đổi trong nhóm được lưu vào lịch sử.
 - Nhập số tiền kiểu `150000`, `150.000`, `150k`, `1.5tr` đều được.

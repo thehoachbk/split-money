@@ -63,6 +63,7 @@ Giúp một nhóm bạn ghi lại chi tiêu chung, biết mỗi người đang n
 - Có thể chọn người tham gia cụ thể; mặc định chia cho tất cả thành viên.
 - Chia đều cho các thành viên được chọn. Nếu không chia hết, phần dư từng đồng được phân cho thành viên theo thứ tự UUID tăng dần để tổng phần chia đúng bằng khoản chi.
 - Khoản chi được sắp xếp mới nhất trước; có thể sửa hoặc xoá.
+- Thành viên nhóm và system admin có thể xuất `.xlsx` gồm nội dung, người trả, tổng tiền và số tiền từng thành viên chịu cho mỗi khoản; phần lẻ được chia theo cùng quy tắc tính số dư.
 - Mọi lần thêm/sửa/xoá ghi nhận người thao tác cùng snapshot trước/sau vào audit log.
 
 ### Số dư và tài khoản nhận tiền chung

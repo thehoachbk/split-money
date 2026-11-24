@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { computeBalances, settleDebts } from './settle.js'
+import { computeBalances, getExpenseShares, settleDebts } from './settle.js'
 
 const members = [{ id: 'a' }, { id: 'b' }, { id: 'c' }]
 
@@ -26,6 +26,24 @@ test('chỉ chia cho người tham gia', () => {
     { amount: 90000, paid_by: 'a', participants: ['b', 'c'] },
   ])
   assert.deepEqual(bal, { a: 90000, b: -45000, c: -45000 })
+})
+
+test('chia khoản lẻ theo thứ tự ID và bảo đảm tổng tiền khớp', () => {
+  const shares = getExpenseShares(members, {
+    amount: 100,
+    paid_by: 'a',
+    participants: ['c', 'b', 'a'],
+  })
+  assert.deepEqual(shares, { a: 34, b: 33, c: 33 })
+  assert.equal(Object.values(shares).reduce((sum, share) => sum + share, 0), 100)
+})
+
+test('khoản chi không chỉ định người tham gia được chia cho cả nhóm', () => {
+  assert.deepEqual(getExpenseShares(members, {
+    amount: 10,
+    paid_by: 'a',
+    participants: [],
+  }), { a: 4, b: 3, c: 3 })
 })
 
 test('settleDebts xoá hết số dư', () => {

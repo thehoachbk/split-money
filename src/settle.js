@@ -1,5 +1,25 @@
 // Tiền tính bằng số nguyên (VND). Số dư dương = được nợ, âm = đang nợ.
 
+export function getExpenseShares(members, expense) {
+  const ids = members.map((member) => member.id)
+  const idSet = new Set(ids)
+  const amount = Math.round(Number(expense.amount))
+  const shares = Object.fromEntries(ids.map((id) => [id, 0]))
+  if (!(amount > 0) || !idSet.has(expense.paid_by)) return shares
+
+  let parts = (expense.participants || []).filter((id) => idSet.has(id))
+  if (parts.length === 0) parts = ids
+  parts = [...parts].sort()
+
+  const base = Math.floor(amount / parts.length)
+  let rem = amount - base * parts.length
+  for (const id of parts) {
+    shares[id] += base + (rem > 0 ? 1 : 0)
+    if (rem > 0) rem--
+  }
+  return shares
+}
+
 export function computeBalances(members, expenses, payments = []) {
   const ids = members.map((m) => m.id)
   const idSet = new Set(ids)
@@ -8,21 +28,9 @@ export function computeBalances(members, expenses, payments = []) {
   for (const e of expenses) {
     const amount = Math.round(Number(e.amount))
     if (!(amount > 0) || !idSet.has(e.paid_by)) continue
-
-    let parts = (e.participants || []).filter((id) => idSet.has(id))
-    if (parts.length === 0) parts = ids
-    parts = [...parts].sort()
-
-    // Chia đều, phần dư (vài đồng) rải cho những người đầu danh sách để tổng luôn khớp
-    const base = Math.floor(amount / parts.length)
-    let rem = amount - base * parts.length
-
+    const shares = getExpenseShares(members, e)
     bal[e.paid_by] += amount
-    for (const id of parts) {
-      const share = base + (rem > 0 ? 1 : 0)
-      if (rem > 0) rem--
-      bal[id] -= share
-    }
+    for (const id of ids) bal[id] -= shares[id]
   }
 
   for (const p of payments) {

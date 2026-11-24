@@ -38,7 +38,7 @@ export async function createExpenseWorkbook(members, expenses) {
   for (let row = 1; row <= expenses.length; row++) {
     for (let column = 2; column < 3 + members.length; column++) {
       const cell = worksheet[XLSX.utils.encode_cell({ r: row, c: column })]
-      if (cell) cell.z = '#,##0 "₫"'
+      if (cell) cell.z = '#,##0'
     }
   }
 

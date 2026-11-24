@@ -24,7 +24,9 @@ test('workbook Excel giữ đúng tiêu đề, dữ liệu và ô tiền dạng 
     [{ id: 'a', name: 'An' }],
     [{ description: 'Ăn sáng', paid_by: 'a', amount: 12500, participants: ['a'] }],
   )
-  assert.equal(workbook.Sheets['Chi tiêu'].D2.z, '#,##0 "₫"')
+  assert.equal(workbook.Sheets['Chi tiêu'].D2.v, 12500)
+  assert.equal(workbook.Sheets['Chi tiêu'].D2.t, 'n')
+  assert.equal(workbook.Sheets['Chi tiêu'].D2.z, '#,##0')
   const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' })
   const result = XLSX.read(buffer, { type: 'buffer' })
   const worksheet = result.Sheets['Chi tiêu']
